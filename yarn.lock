@@ -74,6 +74,11 @@ balanced-match@^1.0.0:
   resolved "https://registry.yarnpkg.com/balanced-match/-/balanced-match-1.0.2.tgz#e83e3a7e3f300b34cb9d87f615fa0cbf357690ee"
   integrity sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==
 
+big-integer@^1.6.48:
+  version "1.6.50"
+  resolved "https://registry.yarnpkg.com/big-integer/-/big-integer-1.6.50.tgz#299a4be8bd441c73dcc492ed46b7169c34e92e70"
+  integrity sha512-+O2uoQWFRo8ysZNo/rjtri2jIwjr3XfeAgRjAUADRqGG+ZITvyn8J1kvXLTaKVr3hhGXk+f23tKfdzmklVM9vQ==
+
 bn.js@5.2.0:
   version "5.2.0"
   resolved "https://registry.yarnpkg.com/bn.js/-/bn.js-5.2.0.tgz#358860674396c6997771a9d051fcc1b57d4ae002"
@@ -139,6 +144,13 @@ elliptic@6.5.4:
     inherits "^2.0.4"
     minimalistic-assert "^1.0.1"
     minimalistic-crypto-utils "^1.0.1"
+
+eos-common@^0.8.1:
+  version "0.8.1"
+  resolved "https://registry.yarnpkg.com/eos-common/-/eos-common-0.8.1.tgz#c92e7dcc58581e654a8f1583295910442ac00555"
+  integrity sha512-Lw1Ua/kBbUjaoT0Py+mMwWiVYr3WmCONdmaDeKclJZwAfLebypGmtAmiYI1+zA/zMDuijm6XjhcyUDz4ENM89w==
+  dependencies:
+    big-integer "^1.6.48"
 
 eosjs@^22.1.0:
   version "22.1.0"

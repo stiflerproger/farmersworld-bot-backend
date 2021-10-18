@@ -1,3 +1,7 @@
-import {Farmer} from "./classes/farmer";
+import {EOSIOAccount} from "./modules/eosio-account";
 
-const farmer = new Farmer("")
+const account = new EOSIOAccount("", {
+  iFarmer: true
+})
+
+account.init();
