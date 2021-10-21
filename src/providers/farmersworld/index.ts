@@ -1,7 +1,7 @@
-import {WithUser} from "./decorators/with-user";
-import {EOSIOAccount} from "../modules/eosio-account";
-import {startWorker as startMinerWorker} from "./workers/farmer-miner";
+import {startWorker as startMinerWorker} from "./workers/worker-miner";
 import {AccountFwTool, FwTool} from "./interfaces/fw-tools";
+import {Logger} from "@utils/logger";
+import {Account} from "@modules/account";
 
 const FW_TOOLS_CACHE: {
   refreshed: number;
@@ -22,14 +22,16 @@ interface Energy {
   max: number,
 }
 
-export class Farmer {
+export class FarmersWorld {
 
+  /** Внутриигровой баланс */
   balance: Balance = {
     wood: 0,
     gold: 0,
     food: 0,
   };
 
+  /** Внутриигровая энергия */
   energy: Energy = {
     current: 0,
     max: 0,
@@ -37,21 +39,75 @@ export class Farmer {
 
   #isEnabled = false;
 
+  // процесс работы с инструментами на карте Mining
   #wMinerStopHook: Function;
 
   tools: AccountFwTool[] = [];
 
-  constructor(public readonly eosio: EOSIOAccount) {
+  logger = new Logger(FarmersWorld.name);
+
+  constructor(public readonly account: Account) {
+
   }
 
   /** Включение бота */
-  @WithUser()
   async enable() {
     if (this.#isEnabled) return;
+
+    if (!await this.#isUserRegistered()) {
+      this.logger.log('Регистрация нового аккаунта...');
+      await this.#regNewUser();
+    }
+
+    this.logger.log('Аккаунт в игре создан');
 
     this.#wMinerStopHook = startMinerWorker(this);
 
     this.#isEnabled = true;
+  }
+
+  async #isUserRegistered() {
+    const res = await this.account.wax.rpc.get_table_rows({
+      code: "farmersworld",
+      index_position: 1,
+      json: true,
+      key_type: "i64",
+      limit: 100,
+      lower_bound: this.account.wax.userAccount,
+      upper_bound: this.account.wax.userAccount,
+      reverse: false,
+      scope: "farmersworld",
+      show_payer: false,
+      table: "accounts",
+    });
+
+    if (res.rows?.length) return true;
+
+    return false;
+  }
+
+  async #regNewUser(referral?: string) {
+
+    const result = await this.account.wax.transact({
+      actions: [{
+        account: "farmersworld",
+        name: "newuser",
+        authorization: [{
+          actor: this.account.wax.userAccount,
+          permission: "active"
+        }],
+        data: {
+          owner: this.account.wax.userAccount,
+          referral_partner: referral || '',
+        }
+      }]
+    }, {
+      blocksBehind: 3,
+      expireSeconds: 30,
+    });
+
+    return result;
+
   }
 
   /** Выключение бота */
@@ -81,7 +137,7 @@ export class Farmer {
 
   async #loadToolsAssets(): Promise<FwTool[]> {
 
-    const res = await this.eosio.rpc.get_table_rows({
+    const res = await this.account.wax.rpc.get_table_rows({
       code: "farmersworld",
       limit: 100,
       lower_bound: "",
@@ -98,19 +154,18 @@ export class Farmer {
     return res.rows;
   }
 
-  @WithUser()
   async getAccountTools(userAccount?: string): Promise<AccountFwTool[]> {
 
     const tools: AccountFwTool[] = [];
 
-    const res = await this.eosio.rpc.get_table_rows({
+    const res = await this.account.wax.rpc.get_table_rows({
       code: "farmersworld",
       scope: "farmersworld",
       table: "tools",
       key_type: "i64",
       index_position: 2,
-      lower_bound: userAccount || this.eosio.userAccount,
-      upper_bound: userAccount || this.eosio.userAccount,
+      lower_bound: userAccount || this.account.wax.userAccount,
+      upper_bound: userAccount || this.account.wax.userAccount,
       limit: 100,
     });
 
@@ -129,7 +184,7 @@ export class Farmer {
       tools.push(Object.assign(tool, { template }));
     }
 
-    if (!userAccount || userAccount === this.eosio.userAccount) {
+    if (!userAccount || userAccount === this.account.wax.userAccount) {
       this.tools = tools;
     }
 
@@ -137,15 +192,14 @@ export class Farmer {
 
   }
 
-  @WithUser()
   async getAccountStats(userAccount?: string): Promise<{balance: Balance, energy: Energy}> {
 
-    const res = await this.eosio.rpc.get_table_rows({
+    const res = await this.account.wax.rpc.get_table_rows({
       code: "farmersworld",
       scope: "farmersworld",
       table: "accounts",
-      lower_bound: userAccount || this.eosio.userAccount,
-      upper_bound: userAccount || this.eosio.userAccount,
+      lower_bound: userAccount || this.account.wax.userAccount,
+      upper_bound: userAccount || this.account.wax.userAccount,
       limit: 1,
     });
 
@@ -174,7 +228,7 @@ export class Farmer {
       }
     };
 
-    if (!userAccount || userAccount === this.eosio.userAccount) {
+    if (!userAccount || userAccount === this.account.wax.userAccount) {
       this.balance = result.balance;
       this.energy = result.energy;
     }
@@ -185,20 +239,18 @@ export class Farmer {
   /**
    * Собрать ресурс
    */
-  @WithUser()
   async claim(assetId: number) {
 
-    return;
-    const result = await this.eosio.api.transact({
+    const result = await this.account.wax.transact({
       actions: [{
         account: "farmersworld",
         name: "claim",
         authorization: [{
-          actor: this.eosio.userAccount,
+          actor: this.account.wax.userAccount,
           permission: "active"
         }],
         data: {
-          owner: this.eosio.userAccount,
+          owner: this.account.wax.userAccount,
           asset_id: assetId,
         }
       }]
