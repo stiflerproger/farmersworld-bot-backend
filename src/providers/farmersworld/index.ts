@@ -2,6 +2,12 @@ import {startWorker as startMinerWorker} from "./workers/worker-miner";
 import {AccountFwTool, FwTool} from "./interfaces/fw-tools";
 import {Logger} from "@utils/logger";
 import {Account} from "@modules/account";
+import * as eosCommon from "eos-common";
+import {Asset} from "eos-common";
+import {clearTimeout} from "timers";
+import {type} from "os";
+import {TransactResult} from "eosjs/dist/eosjs-api-interfaces";
+import {waitFor} from "@utils/wait-for";
 
 const FW_TOOLS_CACHE: {
   refreshed: number;
@@ -234,6 +240,287 @@ export class FarmersWorld {
     }
 
     return result;
+  }
+
+  /** Функция принимает количество ресурсов что хочется видеть на балансе, и возвращает информацию как их получить */
+  async getExchangeInfo(
+    fwg: Asset | null,
+    fwf: Asset | null,
+    fww: Asset | null,
+  ): Promise<{
+    alcor: eosCommon.ExtendedAsset[], // количество для обмена с алкора
+    deposit: eosCommon.ExtendedAsset[] // количество для депозита
+  }> {
+
+    // баланс валют
+    const tokens: { [key: string]: eosCommon.ExtendedAsset } = (await this.account.wax.getBalance({
+      tokens: ["FWG", "FWW", "FWF"]
+    })).reduce((total, cur) => {
+      total[cur.quantity.symbol.code().toString()] = cur; //parseFloat(cur.toString());
+      return total;
+    }, {});
+
+    const result = {
+      deposit: [],
+      alcor: [],
+    };
+
+    // чтобы получить количество с алкора, нужно от запрашиваемого баланса, отнять текущий
+
+    if (fwg && fwg.amount.gt(0)) {
+      if (tokens["FWG"]?.quantity.isGreaterThanOrEqual(fwg)) {
+        // токенов на балансе достаточно
+        tokens["FWG"].quantity.set_amount(fwg.amount);
+
+        result["deposit"].push(tokens["FWG"]);
+      } else {
+        // нужно обменять с алкора
+        if (!tokens["FWG"]) tokens["FWG"] = new eosCommon.ExtendedAsset(0, new eosCommon.ExtendedSymbol(eosCommon.symbol('FWG', 4)));
+
+        tokens["FWG"].quantity.set_amount(fwg.amount.minus(tokens["FWG"].quantity.amount));
+
+        result["alcor"].push(tokens["FWG"]);
+      }
+    }
+
+    if (fwf && fwf.amount.gt(0)) {
+      if (tokens["FWF"]?.quantity.isGreaterThanOrEqual(fwf)) {
+        // токенов на балансе достаточно
+        tokens["FWF"].quantity.set_amount(fwf.amount);
+
+        result["deposit"].push(tokens["FWF"]);
+      } else {
+        // нужно обменять с алкора
+        if (!tokens["FWF"]) tokens["FWF"] = new eosCommon.ExtendedAsset(0, new eosCommon.ExtendedSymbol(eosCommon.symbol('FWF', 4)));
+
+        tokens["FWF"].quantity.set_amount(fwf.amount.minus(tokens["FWF"].quantity.amount));
+
+        result["alcor"].push(tokens["FWF"]);
+      }
+    }
+
+    if (fww && fww.amount.gt(0)) {
+      if (tokens["FWW"]?.quantity.isGreaterThanOrEqual(fww)) {
+        // токенов на балансе достаточно
+        tokens["FWW"].quantity.set_amount(fww.amount);
+
+        result["deposit"].push(tokens["FWW"]);
+      } else {
+        // нужно обменять с алкора
+        if (!tokens["FWW"]) tokens["FWW"] = new eosCommon.ExtendedAsset(0, new eosCommon.ExtendedSymbol(eosCommon.symbol('FWW', 4)));
+
+        tokens["FWW"].quantity.set_amount(fww.amount.minus(tokens["FWW"].quantity.amount));
+
+        result["alcor"].push(tokens["FWW"]);
+      }
+    }
+
+    return result;
+
+  }
+
+  /** Кидаем в депозит весь баланс валют */
+  async depositTokens(tokens: eosCommon.ExtendedAsset[]) {
+    // депозит без комиссий
+
+    return await this.account.wax.transact({
+      actions: [{
+        account: "farmerstoken",
+        name: "transfers",
+        authorization: [{
+          actor: this.account.wax.userAccount,
+          permission: "active"
+        }],
+        data: {
+          from: this.account.wax.userAccount,
+          memo: "deposit",
+          quantities: tokens.map(eosAsset => eosAsset.quantity.toString()),
+          to: "farmersworld"
+        }
+      }]
+    }, {
+      blocksBehind: 3,
+      expireSeconds: 30,
+    });
+
+  }
+
+  /**
+   * Вывод списка токенов. Если комиссия не подходит, то вывод откладывается
+   */
+  async withdrawTokens(tokens: eosCommon.ExtendedAsset[], options: {
+    fee?: number;
+    timeout?: true;
+  }): Promise<Function>;
+  async withdrawTokens(tokens: eosCommon.ExtendedAsset[], options: {
+    fee?: number;
+    timeout?: false;
+  }): Promise<TransactResult>;
+  async withdrawTokens(tokens: eosCommon.ExtendedAsset[], options: {
+    fee?: number;
+    // При True, вывод выполнится когда fee будет подходящим. Можно отменить из возвращенной функции
+    timeout?: boolean;
+  }): Promise<Function | TransactResult>{
+
+    if (typeof options?.fee !== "number") options.fee = 5;
+
+    const config = await this.currentConfig();
+
+    let canceled = false; // если вывод откладывается, то нужен хук отмены
+
+    if (config.fee > options.fee) {
+      // сейчас не выводим, ожидаем другую комиссию
+
+      if (options.timeout === true) {
+
+        (async () => {
+          while (true) {
+
+            await waitFor(10 * 60 * 1000); // проверяем через 10 минут
+
+            if (canceled) return false;
+
+            this.logger.log('Проверка комиссии и вывод..');
+
+            try {
+
+              await this.withdrawTokens(tokens, {...options, timeout: false});
+
+              this.logger.log(`Вывод токенов успешно выполнен! [${tokens.map(eosAsset => eosAsset.quantity.toString()).join(', ')}]`);
+
+              return;
+
+            } catch (e) {
+
+              if (canceled) return;
+              this.logger.error(e);
+              this.logger.log('Попытка вывода через 10 минут');
+
+            }
+
+          }
+        })().then();
+
+        return () => {
+          canceled = true;
+        }
+
+      }
+
+      throw 'Current fee is higher then you want. Fee: ' + config.fee;
+
+    }
+
+    // комиссия подходит, выводим
+
+    return await this.account.wax.transact({
+      actions: [{
+        account: "farmersworld",
+        name: "withdraw",
+        authorization: [{
+          actor: this.account.wax.userAccount,
+          permission: "active"
+        }],
+        data: {
+          fee: config.fee,
+          owner: this.account.wax.userAccount,
+          quantities: tokens.map(eosAsset => eosAsset.quantity.toString()
+            .replace('FWW', 'WOOD')
+            .replace('FWG', 'GOLD')
+            .replace('FWF', 'FOOD')
+          ),
+        }
+      }]
+    }, {
+      blocksBehind: 3,
+      expireSeconds: 30,
+    });
+
+  }
+
+  /**
+   * Актуальные данные конфига (комиссия, макс. энергии и тп)
+   */
+  async currentConfig(): Promise<{
+    fee: number;
+    init_energy: number;
+    init_max_energy: number;
+    last_fee_updated: number;
+    max_fee: number;
+    min_fee: number;
+    reward_noise_max: number;
+    reward_noise_min: number;
+  }> {
+
+    const res = await this.account.wax.rpc.get_table_rows({
+      code: "farmersworld",
+      scope: "farmersworld",
+      table: "config",
+      lower_bound: "",
+      upper_bound: "",
+      limit: 1,
+    });
+
+    const row = res.rows?.length ? res.rows[0] : null;
+
+    if (!row) throw 'Cant load fee data';
+
+    return row;
+
+  }
+
+  /**
+   * Починка инструмента
+   */
+  async repair(tool: AccountFwTool) {
+
+    await this.account.wax.transact({
+      actions: [{
+        account: "farmersworld",
+        name: "repair",
+        authorization: [{
+          actor: this.account.wax.userAccount,
+          permission: "active"
+        }],
+        data: {
+          asset_id: tool.asset_id,
+          asset_owner: this.account.wax.userAccount,
+        }
+      }]
+    }, {
+      blocksBehind: 3,
+      expireSeconds: 30,
+    });
+
+    this.balance.gold -= (tool.durability - tool.current_durability) * 0.2;
+
+  }
+
+  /**
+   * Восстановление энергии
+   */
+  async energyRecover(amount: number) {
+
+    await this.account.wax.transact({
+      actions: [{
+        account: "farmersworld",
+        name: "recover",
+        authorization: [{
+          actor: this.account.wax.userAccount,
+          permission: "active"
+        }],
+        data: {
+          energy_recovered: Math.floor(amount),
+          owner: this.account.wax.userAccount,
+        }
+      }]
+    }, {
+      blocksBehind: 3,
+      expireSeconds: 30,
+    });
+
+    this.balance.food -= Math.floor(amount) * 0.2;
+
   }
 
   /**

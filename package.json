@@ -24,7 +24,6 @@
     "node-fetch": "2.6.1",
     "notp": "^2.0.3",
     "p-map": "4.0.0",
-    "p-queue": "4.0.0",
     "thirty-two": "^1.0.2",
     "tough-cookie": "^4.0.0",
     "tsconfig-paths": "^3.11.0",

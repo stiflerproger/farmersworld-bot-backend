@@ -2024,6 +2024,141 @@ export class Wax {
     return { received };
   }
 
+  /** Метод меняет список переданных токенов на Wax */
+  async swapToWax(tokens: eosCommon.ExtendedAsset[]): Promise<{ received: eosCommon.ExtendedAsset, unswapped?: eosCommon.ExtendedAsset[] }> {
+    if (!this.canTransact) throw 'Can\'t transact. Try later!';
+
+    const result = {
+      received: new eosCommon.ExtendedAsset(
+        0,
+        new eosCommon.ExtendedSymbol(new eosCommon.Sym('WAX', 8), 'eosio.token')
+      ),
+      unswapped: []
+    };
+
+
+    // получаем актуальный баланс
+    const balances = await this.getBalance({
+      tokens: tokens.map(e => e.quantity.symbol.code().toString()),
+    });
+
+    // проверим хватает ли текущего баланса
+    for (const token of tokens) {
+      const tokenInBalance = balances.find(e => e.quantity.symbol.isEqual(token.quantity.symbol));
+
+      if (!tokenInBalance) throw 'Can\'t find token in balance: ' + token.quantity.symbol.code().toString();
+
+      if (tokenInBalance.quantity.isLessThan(token.quantity)) throw `Not enough token balance. Need: ${parseFloat(token.toString())} Has: ${parseFloat(tokenInBalance.toString())}`;
+    }
+
+    for (const token of tokens) {
+
+      try {
+
+        const { received } = await this.swapTokens({
+          quantity: token.quantity.toString(),
+          contract: token.contract.toString(),
+        }, {
+          quantity: '0.00000000 WAX',
+          contract: result.received.contract.toString(),
+        });
+
+        if (+received) {
+          result.received.quantity.set_amount(
+            result.received.quantity.amount.plus(Math.floor(received * Math.pow(10, result.received.quantity.symbol.precision())))
+          );
+        } else {
+          result.unswapped.push(token);
+        }
+
+      } catch (e) {
+        console.error(e);
+        result.unswapped.push(token);
+      }
+
+    }
+
+    return result;
+
+  }
+
+  /**
+   * Метод покупает за Wax список переданных токенов. Может купиться больше планированного токена, но не меньше
+   * @slippage - на сколько процентов больше WAX потратить, чем по текущей цене.
+   */
+  async swapFromWax(tokens: eosCommon.ExtendedAsset[], { slippage = 5 }: {slippage?: number}): Promise<{ received: eosCommon.ExtendedAsset[], unswapped?: eosCommon.ExtendedAsset[], spent: number }> {
+    if (!this.canTransact) throw 'Can\'t transact. Try later!';
+
+    // получаем актуальный баланс
+    let balance = parseFloat((await this.getBalance({
+      token: 'WAX',
+    }))?.quantity.toString()) || 0;
+
+    const result = {
+      received: [],
+      unswapped: [],
+      spent: 0,
+    };
+
+    const swapInfo = await this.getSwapInfo();
+
+    for (const token of tokens) {
+      let swapPreview = swapInfo.calculate('WAX', token.quantity);
+
+      swapPreview.input.quantity.set_amount(
+        Math.floor(swapPreview.input.quantity.amount.toJSNumber() * (1 + (slippage / 100)))
+      );
+
+      const waxAmountNeeded = new eosCommon.ExtendedAsset(
+        swapPreview.input.quantity.amount,
+        new eosCommon.ExtendedSymbol(swapPreview.input.quantity.symbol, 'eosio.token')
+      );
+
+      const waxBalanceNeeded = parseFloat(waxAmountNeeded.quantity.toString());
+
+      if (balance < waxBalanceNeeded) {
+        result.unswapped.push(token); // не хватает баланса для обмена
+        continue;
+      }
+
+      try {
+        // делаем обмен токена
+        const { received } = await this.swapTokens({
+          quantity: waxAmountNeeded.quantity.toString(),
+          contract: waxAmountNeeded.contract.toString(),
+        }, {
+          quantity: swapPreview.output.quantity.toString(),
+          contract: swapPreview.output.contract.toString(),
+        });
+
+        if (+received) {
+
+          const outputPrecision = swapPreview.output.quantity.symbol.precision();
+
+          token.quantity.set_amount(Math.floor(received * Math.pow(10, outputPrecision)));
+
+          result.received.push(token);
+
+          balance -= waxBalanceNeeded;
+
+          result.spent += waxBalanceNeeded;
+
+        } else {
+
+          result.unswapped.push(token);
+
+        }
+
+      } catch (e) {
+        console.error(e);
+        result.unswapped.push(token);
+      }
+
+    }
+
+    return result;
+  }
+
   /** Массив actions с истории транзакций аккаунта */
   async getHistoryActions(options: HistoryActionsOptions): Promise<Action<any>[]> {
     const userAccount = this.getAccountNameOrFail();
