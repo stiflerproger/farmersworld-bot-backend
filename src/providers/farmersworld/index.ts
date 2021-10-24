@@ -50,10 +50,10 @@ export class FarmersWorld {
 
   tools: AccountFwTool[] = [];
 
-  logger = new Logger(FarmersWorld.name);
+  logger: Logger;
 
   constructor(public readonly account: Account) {
-
+    this.logger = new Logger(account.wax.userAccount + '.');
   }
 
   /** Включение бота */
@@ -370,6 +370,7 @@ export class FarmersWorld {
 
     if (config.fee > options.fee) {
       // сейчас не выводим, ожидаем другую комиссию
+      this.logger.log(`Комиссия на вывод ${config.fee}%. Ожидается меньше ${options.fee}%. Проверка через 10 минут`);
 
       if (options.timeout === true) {
 

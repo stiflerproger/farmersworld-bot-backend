@@ -207,7 +207,7 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
     const woodWithdraw = stats.balance.wood >= woodWithdrawLimit
       ? [
         new eosCommon.ExtendedAsset(
-          Math.pow(10, 4) * stats.balance.wood,
+          Math.floor(Math.pow(10, 4) * stats.balance.wood),
           new eosCommon.ExtendedSymbol(eosCommon.symbol('FWW', 4))
         )
       ]
