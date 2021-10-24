@@ -15,7 +15,7 @@ export class CoreService implements OnModuleInit {
 
   async onModuleInit() {
 
-    const userAccounts = await this.accountsService.getAllAccountsForServer();
+    const userAccounts = await this.accountsService.getAllAccounts();
 
     // TODO: из полученных с БД аккаунтов, создавать ботов
     //const bot = new Bot()

@@ -83,9 +83,11 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
 
           farmer.logger.log(`Пора выводить ресурсы: [${refillData.withdraw.map(eosAsset => eosAsset.quantity.toString()).join(', ')}]`);
 
-          withdrawStopHook = await farmer.withdrawTokens(refillData.withdraw, {fee: 6, timeout: true});
+          const stopHook = await farmer.withdrawTokens(refillData.withdraw, {fee: 6, timeout: true});
 
-          if (typeof withdrawStopHook !== 'function') {
+          if (typeof stopHook === 'function') {
+            withdrawStopHook = stopHook;
+          } else {
             // вывод сделался сразу, т.к. комиссия подошла
             withdrawStopHook = null;
             farmer.logger.log(`Ресурсы успешно выведены: [${refillData.withdraw.map(eosAsset => eosAsset.quantity.toString()).join(', ')}]`);
@@ -93,7 +95,7 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
 
         }
 
-        const woodBalance = await farmer.account.wax.getBalance({
+        const woodBalance = await farmer.bot.wax.getBalance({
           token: 'FWW',
         });
 
@@ -102,7 +104,7 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
           // нужно обменять дерево на вакс
           farmer.logger.log(`Нужно обменять FWW на WAX: [${woodBalance.quantity.toString()}]`);
 
-          const result = await farmer.account.wax.swapToWax([woodBalance]);
+          const result = await farmer.bot.wax.swapToWax([woodBalance]);
 
           if (result.unswapped?.length) {
             farmer.logger.error(`Не удалось обменять ресурсы на WAX`);
@@ -122,10 +124,10 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
           // обмениваем с алкора
           farmer.logger.log(`Нужно обменять ресурсы с Alcor: [${refillData.alcor.map(eosAsset => eosAsset.quantity.toString()).join(', ')}]`);
 
-          const res = await farmer.account.wax.swapFromWax(refillData.alcor, {slippage: 5});
+          const res = await farmer.bot.wax.swapFromWax(refillData.alcor, {slippage: 5});
 
           if (res.unswapped?.length) {
-            console.log('Не удалось купить валюту. Пробуем через 15 минут');
+            farmer.logger.error('Не удалось купить валюту. Пробуем через 15 минут');
             rerun(15 * 60 * 1000);
             return;
           }
@@ -297,8 +299,11 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
 
         if (stopped) return;
 
+        farmer.logger.log(`Ремонт..${tool.asset_id} (${tool.template.template_name})`);
         // починить и снять с текущего баланса
         await farmer.repair(tool);
+
+        farmer.logger.log(`Ремонт..${tool.asset_id} (${tool.template.template_name})`);
 
         await waitFor(5000);
 
@@ -311,6 +316,8 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
     ) {
 
       if (stopped) return;
+
+      farmer.logger.log(`Восставновление энергии..`);
 
       await farmer.energyRecover(stats.energy.max - stats.energy.current);
 

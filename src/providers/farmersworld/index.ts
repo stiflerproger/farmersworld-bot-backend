@@ -1,11 +1,9 @@
 import {startWorker as startMinerWorker} from "./workers/worker-miner";
 import {AccountFwTool, FwTool} from "./interfaces/fw-tools";
-import {Logger} from "@utils/logger";
-import {Account} from "@modules/account";
+import {Logger} from "@nestjs/common";
+import {Bot} from "@providers/bot";
 import * as eosCommon from "eos-common";
 import {Asset} from "eos-common";
-import {clearTimeout} from "timers";
-import {type} from "os";
 import {TransactResult} from "eosjs/dist/eosjs-api-interfaces";
 import {waitFor} from "@utils/wait-for";
 
@@ -52,8 +50,8 @@ export class FarmersWorld {
 
   logger: Logger;
 
-  constructor(public readonly account: Account) {
-    this.logger = new Logger(account.wax.userAccount + '.');
+  constructor(public readonly bot: Bot) {
+    this.logger = new Logger(bot.wax.userAccount + '.');
   }
 
   /** Включение бота */
@@ -73,14 +71,14 @@ export class FarmersWorld {
   }
 
   async #isUserRegistered() {
-    const res = await this.account.wax.rpc.get_table_rows({
+    const res = await this.bot.wax.rpc.get_table_rows({
       code: "farmersworld",
       index_position: 1,
       json: true,
       key_type: "i64",
       limit: 100,
-      lower_bound: this.account.wax.userAccount,
-      upper_bound: this.account.wax.userAccount,
+      lower_bound: this.bot.wax.userAccount,
+      upper_bound: this.bot.wax.userAccount,
       reverse: false,
       scope: "farmersworld",
       show_payer: false,
@@ -94,16 +92,16 @@ export class FarmersWorld {
 
   async #regNewUser(referral?: string) {
 
-    const result = await this.account.wax.transact({
+    const result = await this.bot.wax.transact({
       actions: [{
         account: "farmersworld",
         name: "newuser",
         authorization: [{
-          actor: this.account.wax.userAccount,
+          actor: this.bot.wax.userAccount,
           permission: "active"
         }],
         data: {
-          owner: this.account.wax.userAccount,
+          owner: this.bot.wax.userAccount,
           referral_partner: referral || '',
         }
       }]
@@ -143,7 +141,7 @@ export class FarmersWorld {
 
   async #loadToolsAssets(): Promise<FwTool[]> {
 
-    const res = await this.account.wax.rpc.get_table_rows({
+    const res = await this.bot.wax.rpc.get_table_rows({
       code: "farmersworld",
       limit: 100,
       lower_bound: "",
@@ -164,14 +162,14 @@ export class FarmersWorld {
 
     const tools: AccountFwTool[] = [];
 
-    const res = await this.account.wax.rpc.get_table_rows({
+    const res = await this.bot.wax.rpc.get_table_rows({
       code: "farmersworld",
       scope: "farmersworld",
       table: "tools",
       key_type: "i64",
       index_position: 2,
-      lower_bound: userAccount || this.account.wax.userAccount,
-      upper_bound: userAccount || this.account.wax.userAccount,
+      lower_bound: userAccount || this.bot.wax.userAccount,
+      upper_bound: userAccount || this.bot.wax.userAccount,
       limit: 100,
     });
 
@@ -190,7 +188,7 @@ export class FarmersWorld {
       tools.push(Object.assign(tool, { template }));
     }
 
-    if (!userAccount || userAccount === this.account.wax.userAccount) {
+    if (!userAccount || userAccount === this.bot.wax.userAccount) {
       this.tools = tools;
     }
 
@@ -200,12 +198,12 @@ export class FarmersWorld {
 
   async getAccountStats(userAccount?: string): Promise<{balance: Balance, energy: Energy}> {
 
-    const res = await this.account.wax.rpc.get_table_rows({
+    const res = await this.bot.wax.rpc.get_table_rows({
       code: "farmersworld",
       scope: "farmersworld",
       table: "accounts",
-      lower_bound: userAccount || this.account.wax.userAccount,
-      upper_bound: userAccount || this.account.wax.userAccount,
+      lower_bound: userAccount || this.bot.wax.userAccount,
+      upper_bound: userAccount || this.bot.wax.userAccount,
       limit: 1,
     });
 
@@ -234,7 +232,7 @@ export class FarmersWorld {
       }
     };
 
-    if (!userAccount || userAccount === this.account.wax.userAccount) {
+    if (!userAccount || userAccount === this.bot.wax.userAccount) {
       this.balance = result.balance;
       this.energy = result.energy;
     }
@@ -253,7 +251,7 @@ export class FarmersWorld {
   }> {
 
     // баланс валют
-    const tokens: { [key: string]: eosCommon.ExtendedAsset } = (await this.account.wax.getBalance({
+    const tokens: { [key: string]: eosCommon.ExtendedAsset } = (await this.bot.wax.getBalance({
       tokens: ["FWG", "FWW", "FWF"]
     })).reduce((total, cur) => {
       total[cur.quantity.symbol.code().toString()] = cur; //parseFloat(cur.toString());
@@ -323,16 +321,16 @@ export class FarmersWorld {
   async depositTokens(tokens: eosCommon.ExtendedAsset[]) {
     // депозит без комиссий
 
-    return await this.account.wax.transact({
+    return await this.bot.wax.transact({
       actions: [{
         account: "farmerstoken",
         name: "transfers",
         authorization: [{
-          actor: this.account.wax.userAccount,
+          actor: this.bot.wax.userAccount,
           permission: "active"
         }],
         data: {
-          from: this.account.wax.userAccount,
+          from: this.bot.wax.userAccount,
           memo: "deposit",
           quantities: tokens.map(eosAsset => eosAsset.quantity.toString()),
           to: "farmersworld"
@@ -351,7 +349,7 @@ export class FarmersWorld {
   async withdrawTokens(tokens: eosCommon.ExtendedAsset[], options: {
     fee?: number;
     timeout?: true;
-  }): Promise<Function>;
+  }): Promise<Function | TransactResult>;
   async withdrawTokens(tokens: eosCommon.ExtendedAsset[], options: {
     fee?: number;
     timeout?: false;
@@ -360,7 +358,7 @@ export class FarmersWorld {
     fee?: number;
     // При True, вывод выполнится когда fee будет подходящим. Можно отменить из возвращенной функции
     timeout?: boolean;
-  }): Promise<Function | TransactResult>{
+  }): Promise<Function | TransactResult> {
 
     if (typeof options?.fee !== "number") options.fee = 5;
 
@@ -414,17 +412,17 @@ export class FarmersWorld {
 
     // комиссия подходит, выводим
 
-    return await this.account.wax.transact({
+    return await this.bot.wax.transact({
       actions: [{
         account: "farmersworld",
         name: "withdraw",
         authorization: [{
-          actor: this.account.wax.userAccount,
+          actor: this.bot.wax.userAccount,
           permission: "active"
         }],
         data: {
           fee: config.fee,
-          owner: this.account.wax.userAccount,
+          owner: this.bot.wax.userAccount,
           quantities: tokens.map(eosAsset => eosAsset.quantity.toString()
             .replace('FWW', 'WOOD')
             .replace('FWG', 'GOLD')
@@ -453,7 +451,7 @@ export class FarmersWorld {
     reward_noise_min: number;
   }> {
 
-    const res = await this.account.wax.rpc.get_table_rows({
+    const res = await this.bot.wax.rpc.get_table_rows({
       code: "farmersworld",
       scope: "farmersworld",
       table: "config",
@@ -475,17 +473,17 @@ export class FarmersWorld {
    */
   async repair(tool: AccountFwTool) {
 
-    await this.account.wax.transact({
+    await this.bot.wax.transact({
       actions: [{
         account: "farmersworld",
         name: "repair",
         authorization: [{
-          actor: this.account.wax.userAccount,
+          actor: this.bot.wax.userAccount,
           permission: "active"
         }],
         data: {
           asset_id: tool.asset_id,
-          asset_owner: this.account.wax.userAccount,
+          asset_owner: this.bot.wax.userAccount,
         }
       }]
     }, {
@@ -502,17 +500,17 @@ export class FarmersWorld {
    */
   async energyRecover(amount: number) {
 
-    await this.account.wax.transact({
+    await this.bot.wax.transact({
       actions: [{
         account: "farmersworld",
         name: "recover",
         authorization: [{
-          actor: this.account.wax.userAccount,
+          actor: this.bot.wax.userAccount,
           permission: "active"
         }],
         data: {
           energy_recovered: Math.floor(amount),
-          owner: this.account.wax.userAccount,
+          owner: this.bot.wax.userAccount,
         }
       }]
     }, {
@@ -529,16 +527,16 @@ export class FarmersWorld {
    */
   async claim(assetId: number) {
 
-    const result = await this.account.wax.transact({
+    const result = await this.bot.wax.transact({
       actions: [{
         account: "farmersworld",
         name: "claim",
         authorization: [{
-          actor: this.account.wax.userAccount,
+          actor: this.bot.wax.userAccount,
           permission: "active"
         }],
         data: {
-          owner: this.account.wax.userAccount,
+          owner: this.bot.wax.userAccount,
           asset_id: assetId,
         }
       }]
