@@ -7,7 +7,7 @@ export interface FwTool {
   mints: string[];
   rarity: string;
   rewards: string[];
-  schema_name: "tools";
+  schema_name: 'tools';
   template_id: number;
   template_name: string;
   type: string;

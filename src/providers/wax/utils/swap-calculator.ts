@@ -11,7 +11,12 @@ export function createSwapCalculator(
       } else {
         input = eosCommon.symbol_code(input.toUpperCase());
       }
-    } else if (!(input instanceof eosCommon.Asset || input instanceof eosCommon.SymbolCode)) {
+    } else if (
+      !(
+        input instanceof eosCommon.Asset ||
+        input instanceof eosCommon.SymbolCode
+      )
+    ) {
       throw new Error('Invalid type for input');
     }
 
@@ -21,7 +26,12 @@ export function createSwapCalculator(
       } else {
         output = eosCommon.symbol_code(output.toUpperCase());
       }
-    } else if (!(output instanceof eosCommon.Asset || output instanceof eosCommon.SymbolCode)) {
+    } else if (
+      !(
+        output instanceof eosCommon.Asset ||
+        output instanceof eosCommon.SymbolCode
+      )
+    ) {
       throw new Error('Invalid type for output');
     }
 
@@ -29,24 +39,33 @@ export function createSwapCalculator(
       throw new Error('Input and output cannot be the same type');
     }
 
-    const inputSymCode = input instanceof eosCommon.Asset ? input.symbol.code() : input;
-    const outputSymCode = output instanceof eosCommon.Asset ? output.symbol.code() : output;
+    const inputSymCode =
+      input instanceof eosCommon.Asset ? input.symbol.code() : input;
+    const outputSymCode =
+      output instanceof eosCommon.Asset ? output.symbol.code() : output;
     const pair = pairs.get(`${inputSymCode}/${outputSymCode}`);
 
     if (!pair) {
       throw new Error(`No pair found for ${inputSymCode}/${outputSymCode}`);
     }
 
-    const [poolIn, poolOut] = inputSymCode.isEqual(pair.pool1.quantity.symbol.code())
+    const [poolIn, poolOut] = inputSymCode.isEqual(
+      pair.pool1.quantity.symbol.code(),
+    )
       ? [pair.pool1, pair.pool2]
       : [pair.pool2, pair.pool1];
 
     if (input instanceof eosCommon.Asset) {
-      input = eosCommon.asset_to_precision(input, poolIn.quantity.symbol.precision());
+      input = eosCommon.asset_to_precision(
+        input,
+        poolIn.quantity.symbol.precision(),
+      );
 
       const amountInWithFee = input.amount.multiply(10000 - pair.fee);
       const numerator = amountInWithFee.multiply(poolOut.quantity.amount);
-      const denominator = poolIn.quantity.amount.multiply(10000).add(amountInWithFee);
+      const denominator = poolIn.quantity.amount
+        .multiply(10000)
+        .add(amountInWithFee);
       const amountOut = numerator.divide(denominator);
       const minAmountOut = amountOut.minus(amountOut.multiply(50).divide(1000));
 
@@ -65,12 +84,17 @@ export function createSwapCalculator(
     }
 
     if (output instanceof eosCommon.Asset) {
-      output = eosCommon.asset_to_precision(output, poolOut.quantity.symbol.precision());
+      output = eosCommon.asset_to_precision(
+        output,
+        poolOut.quantity.symbol.precision(),
+      );
 
       const amountOut = output.amount;
       const minAmountOut = amountOut.minus(amountOut.multiply(50).divide(1000));
       const amountOutWithFee = amountOut.multiply(10000 - pair.fee);
-      const numerator = poolIn.quantity.amount.multiply(-10000).multiply(amountOut);
+      const numerator = poolIn.quantity.amount
+        .multiply(-10000)
+        .multiply(amountOut);
       const denominator = amountOutWithFee.minus(
         poolOut.quantity.amount.multiply(10000 - pair.fee),
       );

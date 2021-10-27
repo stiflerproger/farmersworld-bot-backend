@@ -172,7 +172,11 @@ export class Wax {
 
       signatureProvider = options.selfManagedAccountOptions.signatureProvider;
 
-      if (!signatureProvider || !signatureProvider.getAvailableKeys || !signatureProvider.sign) {
+      if (
+        !signatureProvider ||
+        !signatureProvider.getAvailableKeys ||
+        !signatureProvider.sign
+      ) {
         throw new Error('No signatureProvider specified');
       }
     } else {
@@ -204,9 +208,9 @@ export class Wax {
     this.rpc = new JsonRpc(DEFAULT_RPC_ENDPOINT, {
       fetch: options.rpcEndpoint
         ? fetch.createEndpointRewriteProxy(options.rpcEndpoint, {
-          category: 'rpc',
-          attempts: 3,
-        })
+            category: 'rpc',
+            attempts: 3,
+          })
         : fetch,
     });
 
@@ -329,7 +333,10 @@ export class Wax {
       });
     }
 
-    if ((typeof blocksBehind === 'number' || useLastIrreversible) && expireSeconds) {
+    if (
+      (typeof blocksBehind === 'number' || useLastIrreversible) &&
+      expireSeconds
+    ) {
       transaction = await (this.api as any).generateTapos(
         info,
         transaction,
@@ -343,10 +350,14 @@ export class Wax {
       throw new Error('Required configuration or TAPOS fields are not present');
     }
 
-    const abis: ApiInterfaces.BinaryAbi[] = await this.api.getTransactionAbis(transaction);
+    const abis: ApiInterfaces.BinaryAbi[] = await this.api.getTransactionAbis(
+      transaction,
+    );
     transaction = {
       ...transaction,
-      context_free_actions: await this.api.serializeActions(transaction.context_free_actions || []),
+      context_free_actions: await this.api.serializeActions(
+        transaction.context_free_actions || [],
+      ),
       actions: await this.api.serializeActions(transaction.actions),
     };
     const serializedTransaction = this.api.serializeTransaction(transaction);
@@ -365,7 +376,8 @@ export class Wax {
         await this.api.signatureProvider.getAvailableKeys(),
       );
       const fuelAvailableKeys = convertPubKeysToNewFormat(
-        fuelProvider && (await fuelProvider.signatureProvider.getAvailableKeys()),
+        fuelProvider &&
+          (await fuelProvider.signatureProvider.getAvailableKeys()),
       );
       const allAvailableKeys = Array.from(
         new Set([
@@ -413,18 +425,20 @@ export class Wax {
       });
 
       if (fuelProvider) {
-        const fuelPushTransactionArgs: RpcInterfaces.PushTransactionArgs = await (fuelProvider
-          .signatureProvider.sign as any)({
-          website,
-          chainId: this.api.chainId,
-          requiredKeys: fuelRequiredKeys,
-          serializedTransaction,
-          serializedContextFreeData,
-          abis,
-        });
+        const fuelPushTransactionArgs: RpcInterfaces.PushTransactionArgs =
+          await (fuelProvider.signatureProvider.sign as any)({
+            website,
+            chainId: this.api.chainId,
+            requiredKeys: fuelRequiredKeys,
+            serializedTransaction,
+            serializedContextFreeData,
+            abis,
+          });
 
         // Добавляем и подписи аккаунта предоставляющего ресурсы
-        pushTransactionArgs.signatures.push(...fuelPushTransactionArgs.signatures);
+        pushTransactionArgs.signatures.push(
+          ...fuelPushTransactionArgs.signatures,
+        );
       }
 
       pushTransactionArgs[Symbol.for('SignOptions')] = {
@@ -456,13 +470,19 @@ export class Wax {
 
     try {
       if (compression) {
-        result = await this.api.pushCompressedSignedTransaction(pushTransactionArgs);
+        result = await this.api.pushCompressedSignedTransaction(
+          pushTransactionArgs,
+        );
       } else {
         result = await this.api.pushSignedTransaction(pushTransactionArgs);
       }
     } catch (e) {
       if (e instanceof RpcError) {
-        if (['tx_net_usage_exceeded', 'tx_cpu_usage_exceeded'].includes(e.json?.error?.name)) {
+        if (
+          ['tx_net_usage_exceeded', 'tx_cpu_usage_exceeded'].includes(
+            e.json?.error?.name,
+          )
+        ) {
           const transactResources = this.#transactResources;
 
           // Обновляем только если пред. время прошло
@@ -470,7 +490,10 @@ export class Wax {
             ++transactResources.failedTransacts;
 
             // Не ограничиваем пока количество ошибок подряд связанных с ресурсами меньше 3
-            const attemptsOverrun = Math.max(0, transactResources.failedTransacts - 2);
+            const attemptsOverrun = Math.max(
+              0,
+              transactResources.failedTransacts - 2,
+            );
 
             if (attemptsOverrun) {
               // Ставим время ожидания с шагом в 5 минут, но не больше 30 минут
@@ -521,7 +544,10 @@ export class Wax {
       let transaction: RpcInterfaces.GetTransactionResult;
 
       try {
-        transaction = await this.api.rpc.history_get_transaction(options.id, options.blockNumHint);
+        transaction = await this.api.rpc.history_get_transaction(
+          options.id,
+          options.blockNumHint,
+        );
       } catch (e) {
         if (e instanceof RpcError && e.json?.error === 'not found') {
           continue;
@@ -603,10 +629,15 @@ export class Wax {
           accountInfo.pending = null;
 
           for (let i = 0, l = pending.length; i < l; i++) {
-            if (accountInfo.account.account_name === pending[i].options.userAccount) {
+            if (
+              accountInfo.account.account_name ===
+              pending[i].options.userAccount
+            ) {
               pending[i].handlers[0](accountInfo.account);
             } else {
-              pending[i].handlers[1](new Error('Unexpected error. Logged account name changed'));
+              pending[i].handlers[1](
+                new Error('Unexpected error. Logged account name changed'),
+              );
             }
           }
         },
@@ -638,7 +669,10 @@ export class Wax {
         if (e instanceof RpcError && Array.isArray(e.json?.error?.details)) {
           for (const details of e.json.error.details) {
             if (/^unknown key/i.test(details?.message)) {
-              throw new WaxWebError(`Account "${userAccount}" not found`, 'ACCOUNT_NOT_FOUND');
+              throw new WaxWebError(
+                `Account "${userAccount}" not found`,
+                'ACCOUNT_NOT_FOUND',
+              );
             }
           }
         }
@@ -647,7 +681,10 @@ export class Wax {
       }
 
       if (!account) {
-        throw new WaxWebError(`Account "${userAccount}" not found`, 'ACCOUNT_NOT_FOUND');
+        throw new WaxWebError(
+          `Account "${userAccount}" not found`,
+          'ACCOUNT_NOT_FOUND',
+        );
       }
 
       return account;
@@ -685,7 +722,10 @@ export class Wax {
     for (const k in resources) {
       if (!Object.prototype.hasOwnProperty.call(resources, k)) continue;
 
-      if (!Number.isFinite(resources[k].total) || !Number.isFinite(resources[k].used)) {
+      if (
+        !Number.isFinite(resources[k].total) ||
+        !Number.isFinite(resources[k].used)
+      ) {
         throw new WaxWebError(
           `Invalid account resource data (${k} = ${resources[k].used}/${resources[k].total})`,
         );
@@ -763,7 +803,10 @@ export class Wax {
         return;
       }
 
-      if (options.tokens && !(Array.isArray(options.tokens) && options.tokens.length)) {
+      if (
+        options.tokens &&
+        !(Array.isArray(options.tokens) && options.tokens.length)
+      ) {
         reject(new Error('Property tokens must be a non empty array'));
 
         return;
@@ -828,7 +871,10 @@ export class Wax {
               const pending = balanceInfo.pending;
               balanceInfo.pending = null;
 
-              resolvePending(pending, e || new Error('Unknown error fetching swap info'));
+              resolvePending(
+                pending,
+                e || new Error('Unknown error fetching swap info'),
+              );
 
               return;
             }
@@ -872,7 +918,11 @@ export class Wax {
             tokens.push({
               symbol: response.tokens[i].symbol.toUpperCase(),
               precision,
-              amount: BigInt((+response.tokens[i].amount || 0).toFixed(precision).replace('.', '')),
+              amount: BigInt(
+                (+response.tokens[i].amount || 0)
+                  .toFixed(precision)
+                  .replace('.', ''),
+              ),
               contract: response.tokens[i].contract,
             });
           }
@@ -910,7 +960,11 @@ export class Wax {
               ? BigInt(body.balances[i].amount.replace('.', ''))
               : BigInt(0);
           } else {
-            amount = BigInt((+body.balances[i].amount || 0).toFixed(precision).replace('.', ''));
+            amount = BigInt(
+              (+body.balances[i].amount || 0)
+                .toFixed(precision)
+                .replace('.', ''),
+            );
           }
 
           tokens.push({
@@ -926,7 +980,8 @@ export class Wax {
       for (let i = 0, l = PREDEFINED_TOKENS_INFO.length; i < l; i++) {
         const token = PREDEFINED_TOKENS_INFO[i];
 
-        if (tokens.some((existing) => token.symbol === existing.symbol)) continue;
+        if (tokens.some((existing) => token.symbol === existing.symbol))
+          continue;
 
         tokens.push({
           ...token,
@@ -937,7 +992,8 @@ export class Wax {
       const formatted: BalanceInfo['tokens'] = new Map();
 
       for (let i = tokens.length - 1; i >= 0; i--) {
-        const oldTokenInfo = balanceInfo.tokens && balanceInfo.tokens.get(tokens[i].symbol);
+        const oldTokenInfo =
+          balanceInfo.tokens && balanceInfo.tokens.get(tokens[i].symbol);
         const reservations: BalanceToken['_reservations'] = [];
 
         if (oldTokenInfo) {
@@ -959,20 +1015,26 @@ export class Wax {
           for (let y = 0, l = oldTokenInfo._reservations.length; y < l; y++) {
             const reserv = oldTokenInfo._reservations[y];
 
-            if (reserv.expired || (reserv.expireAt != null && reserv.expireAt <= timeNow)) continue;
+            if (
+              reserv.expired ||
+              (reserv.expireAt != null && reserv.expireAt <= timeNow)
+            )
+              continue;
 
             // Корректируем в случае изменения precision
             if (precisionDiffMultiply) {
               reserv.amount = reserv.amount * precisionDiffMultiply;
 
               if (reserv.scheduled) {
-                reserv.scheduled.filled = reserv.scheduled.filled * precisionDiffMultiply;
+                reserv.scheduled.filled =
+                  reserv.scheduled.filled * precisionDiffMultiply;
               }
             } else if (precisionDiffDivide) {
               reserv.amount = reserv.amount / precisionDiffDivide;
 
               if (reserv.scheduled) {
-                reserv.scheduled.filled = reserv.scheduled.filled / precisionDiffDivide;
+                reserv.scheduled.filled =
+                  reserv.scheduled.filled / precisionDiffDivide;
               }
             }
 
@@ -990,7 +1052,10 @@ export class Wax {
       balanceInfo.updated = Date.now();
     }
 
-    function resolvePending(pending: BalanceInfo['pending'], convertErr?: any): void {
+    function resolvePending(
+      pending: BalanceInfo['pending'],
+      convertErr?: any,
+    ): void {
       for (let i = 0, l = pending.length; i < l; i++) {
         if (convertErr && pending[i].options.convertTo) {
           pending[i].handlers[1](convertErr);
@@ -1021,7 +1086,9 @@ export class Wax {
         if (!token) return null;
 
         const asset = eosCommon.extended_asset(
-          options.ignoreReservations ? token.amount : getBalanceTokenFreeAmount(token),
+          options.ignoreReservations
+            ? token.amount
+            : getBalanceTokenFreeAmount(token),
           eosCommon.extended_symbol(
             eosCommon.symbol(token.symbol, token.precision),
             eosCommon.name(token.contract),
@@ -1032,7 +1099,10 @@ export class Wax {
           return asset;
         }
 
-        const converted = SWAP_INFO.calculate(asset.quantity, options.convertTo);
+        const converted = SWAP_INFO.calculate(
+          asset.quantity,
+          options.convertTo,
+        );
 
         return eosCommon.extended_asset(
           converted.output.quantity,
@@ -1063,7 +1133,9 @@ export class Wax {
       for (let i = 0, l = tokens.length; i < l; i++) {
         const token = tokens[i];
         const asset = eosCommon.extended_asset(
-          options.ignoreReservations ? token.amount : getBalanceTokenFreeAmount(token),
+          options.ignoreReservations
+            ? token.amount
+            : getBalanceTokenFreeAmount(token),
           eosCommon.extended_symbol(
             eosCommon.symbol(token.symbol, token.precision),
             eosCommon.name(token.contract),
@@ -1077,7 +1149,10 @@ export class Wax {
         }
 
         try {
-          const converted = SWAP_INFO.calculate(asset.quantity, options.convertTo);
+          const converted = SWAP_INFO.calculate(
+            asset.quantity,
+            options.convertTo,
+          );
 
           results.push(
             eosCommon.extended_asset(
@@ -1127,7 +1202,9 @@ export class Wax {
   /**
    * Резервирование баланса
    */
-  async reserveBalance(options: ReserveBalanceOptions): Promise<ReserveBalanceResultWithRelease>;
+  async reserveBalance(
+    options: ReserveBalanceOptions,
+  ): Promise<ReserveBalanceResultWithRelease>;
   async reserveBalance<T>(
     options: ReserveBalanceOptions,
     closure: ReserveBalanceClosure<T>,
@@ -1142,7 +1219,11 @@ export class Wax {
 
     options = { ...options };
 
-    if (options.key != null && typeof options.key !== 'string' && typeof options.key !== 'symbol') {
+    if (
+      options.key != null &&
+      typeof options.key !== 'string' &&
+      typeof options.key !== 'symbol'
+    ) {
       throw new Error('If specified, property key must be a string or symbol');
     }
 
@@ -1191,7 +1272,9 @@ export class Wax {
         if (!symCode) {
           symCode = quantitySymCode;
         } else if (symCode.isNotEqual(quantitySymCode)) {
-          throw new Error('Both quantity.min and quantity.max must have the same symbol code');
+          throw new Error(
+            'Both quantity.min and quantity.max must have the same symbol code',
+          );
         }
       });
 
@@ -1209,8 +1292,15 @@ export class Wax {
         throw new Error('Property key required with schedule');
       }
 
-      if (!quantity || !quantity.min || !quantity.max || quantity.min.isNotEqual(quantity.max)) {
-        throw new Error('Property quantity must be a fixed asset with schedule');
+      if (
+        !quantity ||
+        !quantity.min ||
+        !quantity.max ||
+        quantity.min.isNotEqual(quantity.max)
+      ) {
+        throw new Error(
+          'Property quantity must be a fixed asset with schedule',
+        );
       }
     }
 
@@ -1222,7 +1312,10 @@ export class Wax {
     const token = this.#balanceInfo.tokens.get(symCode.toString());
 
     if (!token) {
-      throw new WaxWebError(`Token ${symCode.toString()} not found`, 'NO_TOKEN');
+      throw new WaxWebError(
+        `Token ${symCode.toString()} not found`,
+        'NO_TOKEN',
+      );
     }
 
     let amount = token.amount;
@@ -1237,7 +1330,11 @@ export class Wax {
         amount -= reserv.amount;
       }
 
-      if (options.key != null && options.key === reserv.key && !reserv.expired) {
+      if (
+        options.key != null &&
+        options.key === reserv.key &&
+        !reserv.expired
+      ) {
         reservation = reserv;
       }
     }
@@ -1245,7 +1342,9 @@ export class Wax {
     if (reservation) {
       if (reservation.scheduled) {
         reservation.amount = BigInt(
-          eosCommon.asset_to_precision(quantity.max, token.precision).amount.toString(10),
+          eosCommon
+            .asset_to_precision(quantity.max, token.precision)
+            .amount.toString(10),
         );
 
         // Если новая сумма резервации меньше чем уже заполнено, возвращаем лишнее в сумму баланса
@@ -1257,7 +1356,9 @@ export class Wax {
     } else if (options.schedule) {
       reservation = {
         amount: BigInt(
-          eosCommon.asset_to_precision(quantity.max, token.precision).amount.toString(10),
+          eosCommon
+            .asset_to_precision(quantity.max, token.precision)
+            .amount.toString(10),
         ),
         key: options.key,
         scheduled: {
@@ -1283,11 +1384,13 @@ export class Wax {
       }
 
       const amountToFill = reserv.amount - reserv.scheduled.filled;
-      const availableAmountToFill = amountToFill <= amount ? amountToFill : amount;
+      const availableAmountToFill =
+        amountToFill <= amount ? amountToFill : amount;
 
       if (!m) {
         requiredAmount +=
-          amountToFill - (availableAmountToFill < 0 ? BigInt(0) : availableAmountToFill);
+          amountToFill -
+          (availableAmountToFill < 0 ? BigInt(0) : availableAmountToFill);
       }
 
       if (availableAmountToFill > 0) {
@@ -1299,7 +1402,9 @@ export class Wax {
     }
 
     if (reservation && reservation.scheduled) {
-      reservation.expireAt = Number.isFinite(options.timeout) ? Date.now() + options.timeout : null;
+      reservation.expireAt = Number.isFinite(options.timeout)
+        ? Date.now() + options.timeout
+        : null;
 
       if (reservation.scheduled.filled < reservation.amount) {
         const requiredQuantity = eosCommon.asset(
@@ -1310,13 +1415,15 @@ export class Wax {
         if (options.swap) {
           // Клонируем и добавляем 3% к необходимой сумме, чтобы компенсировать волатильность курса
           const requiredQuantityForSwap = eosCommon.asset(
-            (BigInt(requiredQuantity.amount.toString()) * BigInt(103)) / BigInt(100),
+            (BigInt(requiredQuantity.amount.toString()) * BigInt(103)) /
+              BigInt(100),
             requiredQuantity.symbol,
           );
 
           const swapInfo = await this.getSwapInfo(options.freshness);
           const balancesToConvert = await this.getBalance({
-            tokens: typeof options.swap === 'object' ? options.swap.tokens : null,
+            tokens:
+              typeof options.swap === 'object' ? options.swap.tokens : null,
             freshness: options.freshness,
           });
           const convertedInfo: (AlcorAmmSwapCalculateResult & {
@@ -1325,9 +1432,13 @@ export class Wax {
 
           for (let i = 0, l = balancesToConvert.length; i < l; i++) {
             try {
-              const converted = swapInfo.calculate(balancesToConvert[i].quantity, token.symbol);
+              const converted = swapInfo.calculate(
+                balancesToConvert[i].quantity,
+                token.symbol,
+              );
 
-              converted['_sortIndex'] = converted.output.quantity.amount.toJSNumber();
+              converted['_sortIndex'] =
+                converted.output.quantity.amount.toJSNumber();
 
               convertedInfo.push(converted as any);
             } catch (e) {
@@ -1336,7 +1447,9 @@ export class Wax {
           }
 
           // Сортируем по убыванию
-          convertedInfo.sort((a, b) => b.output._sortIndex - a.output._sortIndex);
+          convertedInfo.sort(
+            (a, b) => b.output._sortIndex - a.output._sortIndex,
+          );
 
           const swapTasks: {
             input: {
@@ -1360,7 +1473,11 @@ export class Wax {
                 requiredQuantityForSwap,
               );
 
-              if (needConverted.input.quantity.isLessThan(convertedInfo[i].input.quantity)) {
+              if (
+                needConverted.input.quantity.isLessThan(
+                  convertedInfo[i].input.quantity,
+                )
+              ) {
                 acquiredReservation = await this.reserveBalance({
                   quantity: needConverted.input.quantity,
                   timeout: 300000, // 5 минут
@@ -1400,7 +1517,9 @@ export class Wax {
             if (requiredQuantityForSwap.amount.lesserOrEquals(0)) {
               await Promise.all(
                 swapTasks.map((task) => {
-                  return this.swapTokens(task.input, task.output).finally(task.reservation.release);
+                  return this.swapTokens(task.input, task.output).finally(
+                    task.reservation.release,
+                  );
                 }),
               );
 
@@ -1414,7 +1533,9 @@ export class Wax {
         }
 
         throw new WaxWebError(
-          `Reservation "${String(reservation.key)}" for ${symCode.toString()} is not fulfilled yet`,
+          `Reservation "${String(
+            reservation.key,
+          )}" for ${symCode.toString()} is not fulfilled yet`,
           'NOT_FULFILLED',
           { requiredQuantity },
         );
@@ -1427,20 +1548,32 @@ export class Wax {
       }
 
       if (amount <= 0) {
-        throw new WaxWebError(`Not enough balance for ${symCode.toString()}`, 'NO_BALANCE');
+        throw new WaxWebError(
+          `Not enough balance for ${symCode.toString()}`,
+          'NO_BALANCE',
+        );
       }
 
       if (quantity) {
         if (quantity.min) {
-          quantity.min = eosCommon.asset_to_precision(quantity.min, token.precision);
+          quantity.min = eosCommon.asset_to_precision(
+            quantity.min,
+            token.precision,
+          );
 
           if (quantity.min.amount.greater(amount)) {
-            throw new WaxWebError(`Not enough balance for ${symCode.toString()}`, 'NO_BALANCE');
+            throw new WaxWebError(
+              `Not enough balance for ${symCode.toString()}`,
+              'NO_BALANCE',
+            );
           }
         }
 
         if (quantity.max) {
-          quantity.max = eosCommon.asset_to_precision(quantity.max, token.precision);
+          quantity.max = eosCommon.asset_to_precision(
+            quantity.max,
+            token.precision,
+          );
 
           if (quantity.max.amount.lesser(amount)) {
             amount = BigInt(quantity.max.amount.toString(10));
@@ -1460,7 +1593,9 @@ export class Wax {
         token._reservations.push(reservation);
       }
 
-      reservation.expireAt = Number.isFinite(options.timeout) ? Date.now() + options.timeout : null;
+      reservation.expireAt = Number.isFinite(options.timeout)
+        ? Date.now() + options.timeout
+        : null;
     }
 
     const asset = eosCommon.asset(
@@ -1732,7 +1867,10 @@ export class Wax {
   /**
    * Подсчет стоимости RAM
    */
-  calculateRamCost(options: { bytes: number; freshness?: number }): Promise<eosCommon.Asset>;
+  calculateRamCost(options: {
+    bytes: number;
+    freshness?: number;
+  }): Promise<eosCommon.Asset>;
   calculateRamCost(options: {
     quantity: string | eosCommon.Asset;
     freshness?: number;
@@ -1756,7 +1894,11 @@ export class Wax {
       } else if (options.quantity instanceof eosCommon.Asset) {
         pendingOptions.quantity = options.quantity;
       } else {
-        reject(new Error('No bytes or quantity property specified. One of them is required'));
+        reject(
+          new Error(
+            'No bytes or quantity property specified. One of them is required',
+          ),
+        );
 
         return;
       }
@@ -1848,15 +1990,22 @@ export class Wax {
       if (options.bytes != null) {
         return eosCommon.asset(
           Math.ceil(options.bytes * RAM_COST_INFO.pricePerByte),
-          eosCommon.symbol(RAM_COST_INFO.quoteSymbol, RAM_COST_INFO.quotePrecision),
+          eosCommon.symbol(
+            RAM_COST_INFO.quoteSymbol,
+            RAM_COST_INFO.quotePrecision,
+          ),
         );
       }
       if (options.quantity != null) {
-        return Math.floor(options.quantity.amount.toJSNumber() / RAM_COST_INFO.pricePerByte);
+        return Math.floor(
+          options.quantity.amount.toJSNumber() / RAM_COST_INFO.pricePerByte,
+        );
       }
 
       // До этого не должно доходить, так как проверяется перед добавлением
-      throw new Error('Unexpected error. No bytes or quantity property specified');
+      throw new Error(
+        'Unexpected error. No bytes or quantity property specified',
+      );
     }
   }
 
@@ -1933,7 +2082,8 @@ export class Wax {
           fee_contract: rows[i].fee_contract,
         };
 
-        if (isAssetNotLegit(pair.pool1) || isAssetNotLegit(pair.pool2)) continue;
+        if (isAssetNotLegit(pair.pool1) || isAssetNotLegit(pair.pool2))
+          continue;
 
         const symCode1 = pair.pool1.quantity.symbol.code();
         const symCode2 = pair.pool2.quantity.symbol.code();
@@ -1947,8 +2097,12 @@ export class Wax {
       SWAP_INFO.updated = Date.now();
     }
 
-    function isAssetNotLegit(asset: { quantity: eosCommon.Asset, contract: string }): boolean {
-      const tokenInfo = PREDEFINED_TOKENS_INFO_LOOKUP[asset.quantity.symbol.code().toString()];
+    function isAssetNotLegit(asset: {
+      quantity: eosCommon.Asset;
+      contract: string;
+    }): boolean {
+      const tokenInfo =
+        PREDEFINED_TOKENS_INFO_LOOKUP[asset.quantity.symbol.code().toString()];
 
       return tokenInfo && asset.contract !== tokenInfo.contract;
     }
@@ -1967,7 +2121,11 @@ export class Wax {
       contract: string;
     },
   ): Promise<{ received: number }> {
-    if (!output || typeof output.quantity !== 'string' || typeof output.contract !== 'string') {
+    if (
+      !output ||
+      typeof output.quantity !== 'string' ||
+      typeof output.contract !== 'string'
+    ) {
       throw new Error('Invalid output');
     }
 
@@ -2003,18 +2161,25 @@ export class Wax {
 
     let received = 0;
 
-    const inlineTraces = transaction?.processed?.action_traces?.[0]?.inline_traces;
+    const inlineTraces =
+      transaction?.processed?.action_traces?.[0]?.inline_traces;
 
     if (Array.isArray(inlineTraces)) {
       for (let i = 0, l = inlineTraces.length; i < l; i++) {
         const trace = inlineTraces[i];
 
-        if (trace.act?.name !== 'transfer' || trace.act.data?.to !== userAccount) continue;
+        if (
+          trace.act?.name !== 'transfer' ||
+          trace.act.data?.to !== userAccount
+        )
+          continue;
 
         received = parseFloat(trace.act.data.quantity);
 
         if (!Number.isFinite(received)) {
-          throw new WaxWebError(`Invalid received value "${trace.act.data.quantity}"`);
+          throw new WaxWebError(
+            `Invalid received value "${trace.act.data.quantity}"`,
+          );
         }
 
         break;
@@ -2025,74 +2190,103 @@ export class Wax {
   }
 
   /** Метод меняет список переданных токенов на Wax */
-  async swapToWax(tokens: eosCommon.ExtendedAsset[]): Promise<{ received: eosCommon.ExtendedAsset, unswapped?: eosCommon.ExtendedAsset[] }> {
-    if (!this.canTransact) throw 'Can\'t transact. Try later!';
+  async swapToWax(tokens: eosCommon.ExtendedAsset[]): Promise<{
+    received: eosCommon.ExtendedAsset;
+    unswapped?: eosCommon.ExtendedAsset[];
+  }> {
+    if (!this.canTransact) throw "Can't transact. Try later!";
 
     const result = {
       received: new eosCommon.ExtendedAsset(
         0,
-        new eosCommon.ExtendedSymbol(new eosCommon.Sym('WAX', 8), 'eosio.token')
+        new eosCommon.ExtendedSymbol(
+          new eosCommon.Sym('WAX', 8),
+          'eosio.token',
+        ),
       ),
-      unswapped: []
+      unswapped: [],
     };
-
 
     // получаем актуальный баланс
     const balances = await this.getBalance({
-      tokens: tokens.map(e => e.quantity.symbol.code().toString()),
+      tokens: tokens.map((e) => e.quantity.symbol.code().toString()),
     });
 
     // проверим хватает ли текущего баланса
     for (const token of tokens) {
-      const tokenInBalance = balances.find(e => e.quantity.symbol.isEqual(token.quantity.symbol));
+      const tokenInBalance = balances.find((e) =>
+        e.quantity.symbol.isEqual(token.quantity.symbol),
+      );
 
-      if (!tokenInBalance) throw 'Can\'t find token in balance: ' + token.quantity.symbol.code().toString();
+      if (!tokenInBalance)
+        throw (
+          "Can't find token in balance: " +
+          token.quantity.symbol.code().toString()
+        );
 
-      if (tokenInBalance.quantity.isLessThan(token.quantity)) throw `Not enough token balance. Need: ${parseFloat(token.toString())} Has: ${parseFloat(tokenInBalance.toString())}`;
+      if (tokenInBalance.quantity.isLessThan(token.quantity))
+        throw `Not enough token balance. Need: ${parseFloat(
+          token.toString(),
+        )} Has: ${parseFloat(tokenInBalance.toString())}`;
     }
 
     for (const token of tokens) {
-
       try {
-
-        const { received } = await this.swapTokens({
-          quantity: token.quantity.toString(),
-          contract: token.contract.toString(),
-        }, {
-          quantity: '0.00000000 WAX',
-          contract: result.received.contract.toString(),
-        });
+        const { received } = await this.swapTokens(
+          {
+            quantity: token.quantity.toString(),
+            contract: token.contract.toString(),
+          },
+          {
+            quantity: '0.00000000 WAX',
+            contract: result.received.contract.toString(),
+          },
+        );
 
         if (+received) {
           result.received.quantity.set_amount(
-            result.received.quantity.amount.plus(Math.floor(received * Math.pow(10, result.received.quantity.symbol.precision())))
+            result.received.quantity.amount.plus(
+              Math.floor(
+                received *
+                  Math.pow(10, result.received.quantity.symbol.precision()),
+              ),
+            ),
           );
         } else {
           result.unswapped.push(token);
         }
-
       } catch (e) {
         console.error(e);
         result.unswapped.push(token);
       }
-
     }
 
     return result;
-
   }
 
   /**
    * Метод покупает за Wax список переданных токенов. Может купиться больше планированного токена, но не меньше
    * @slippage - на сколько процентов больше WAX потратить, чем по текущей цене.
    */
-  async swapFromWax(tokens: eosCommon.ExtendedAsset[], { slippage = 5 }: {slippage?: number}): Promise<{ received: eosCommon.ExtendedAsset[], unswapped?: eosCommon.ExtendedAsset[], spent: number }> {
-    if (!this.canTransact) throw 'Can\'t transact. Try later!';
+  async swapFromWax(
+    tokens: eosCommon.ExtendedAsset[],
+    { slippage = 5 }: { slippage?: number },
+  ): Promise<{
+    received: eosCommon.ExtendedAsset[];
+    unswapped?: eosCommon.ExtendedAsset[];
+    spent: number;
+  }> {
+    if (!this.canTransact) throw "Can't transact. Try later!";
 
     // получаем актуальный баланс
-    let balance = parseFloat((await this.getBalance({
-      token: 'WAX',
-    }))?.quantity.toString()) || 0;
+    let balance =
+      parseFloat(
+        (
+          await this.getBalance({
+            token: 'WAX',
+          })
+        )?.quantity.toString(),
+      ) || 0;
 
     const result = {
       received: [],
@@ -2103,15 +2297,20 @@ export class Wax {
     const swapInfo = await this.getSwapInfo();
 
     for (const token of tokens) {
-      let swapPreview = swapInfo.calculate('WAX', token.quantity);
+      const swapPreview = swapInfo.calculate('WAX', token.quantity);
 
       swapPreview.input.quantity.set_amount(
-        Math.floor(swapPreview.input.quantity.amount.toJSNumber() * (1 + (slippage / 100)))
+        Math.floor(
+          swapPreview.input.quantity.amount.toJSNumber() * (1 + slippage / 100),
+        ),
       );
 
       const waxAmountNeeded = new eosCommon.ExtendedAsset(
         swapPreview.input.quantity.amount,
-        new eosCommon.ExtendedSymbol(swapPreview.input.quantity.symbol, 'eosio.token')
+        new eosCommon.ExtendedSymbol(
+          swapPreview.input.quantity.symbol,
+          'eosio.token',
+        ),
       );
 
       const waxBalanceNeeded = parseFloat(waxAmountNeeded.quantity.toString());
@@ -2123,44 +2322,46 @@ export class Wax {
 
       try {
         // делаем обмен токена
-        const { received } = await this.swapTokens({
-          quantity: waxAmountNeeded.quantity.toString(),
-          contract: waxAmountNeeded.contract.toString(),
-        }, {
-          quantity: swapPreview.output.quantity.toString(),
-          contract: swapPreview.output.contract.toString(),
-        });
+        const { received } = await this.swapTokens(
+          {
+            quantity: waxAmountNeeded.quantity.toString(),
+            contract: waxAmountNeeded.contract.toString(),
+          },
+          {
+            quantity: swapPreview.output.quantity.toString(),
+            contract: swapPreview.output.contract.toString(),
+          },
+        );
 
         if (+received) {
+          const outputPrecision =
+            swapPreview.output.quantity.symbol.precision();
 
-          const outputPrecision = swapPreview.output.quantity.symbol.precision();
-
-          token.quantity.set_amount(Math.floor(received * Math.pow(10, outputPrecision)));
+          token.quantity.set_amount(
+            Math.floor(received * Math.pow(10, outputPrecision)),
+          );
 
           result.received.push(token);
 
           balance -= waxBalanceNeeded;
 
           result.spent += waxBalanceNeeded;
-
         } else {
-
           result.unswapped.push(token);
-
         }
-
       } catch (e) {
         console.error(e);
         result.unswapped.push(token);
       }
-
     }
 
     return result;
   }
 
   /** Массив actions с истории транзакций аккаунта */
-  async getHistoryActions(options: HistoryActionsOptions): Promise<Action<any>[]> {
+  async getHistoryActions(
+    options: HistoryActionsOptions,
+  ): Promise<Action<any>[]> {
     const userAccount = this.getAccountNameOrFail();
 
     if (typeof options !== 'object') {
@@ -2175,12 +2376,15 @@ export class Wax {
       const limit = 100;
       const skip = i * limit;
 
-      const { total, actions } = await this.hyperionRpc.get_actions(userAccount, {
-        ...options,
-        sort: 'desc',
-        skip,
-        limit,
-      });
+      const { total, actions } = await this.hyperionRpc.get_actions(
+        userAccount,
+        {
+          ...options,
+          sort: 'desc',
+          skip,
+          limit,
+        },
+      );
 
       if (typeof total?.value !== 'number') {
         throw new Error(
@@ -2263,9 +2467,12 @@ export class Wax {
       collection.refreshed = Date.now();
     }
 
-    if (!filters?.schemaName || typeof filters.schemaName !== 'string') return collection.templates;
+    if (!filters?.schemaName || typeof filters.schemaName !== 'string')
+      return collection.templates;
 
-    return collection.templates.filter((e) => e.schema.schema_name === filters.schemaName);
+    return collection.templates.filter(
+      (e) => e.schema.schema_name === filters.schemaName,
+    );
   }
 }
 
@@ -2275,7 +2482,10 @@ interface RamCostInfo {
   pricePerByte?: number;
   updated: number;
   pending?: {
-    handlers: [(value: eosCommon.Asset | number) => void, (reason?: any) => void];
+    handlers: [
+      (value: eosCommon.Asset | number) => void,
+      (reason?: any) => void,
+    ];
     options: {
       bytes?: number;
       quantity?: eosCommon.Asset;
@@ -2294,7 +2504,10 @@ interface AccountInfo {
   account?: RpcInterfaces.GetAccountResult;
   updated: number;
   pending?: {
-    handlers: [(value: RpcInterfaces.GetAccountResult) => void, (reason?: any) => void];
+    handlers: [
+      (value: RpcInterfaces.GetAccountResult) => void,
+      (reason?: any) => void,
+    ];
     options: {
       userAccount: string;
     };

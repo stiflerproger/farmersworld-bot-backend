@@ -1,6 +1,6 @@
-import { Client as NatsClient } from 'nats';
+import { NatsConnection } from 'nats';
 
-export function getNativeNatsClient(client: any): NatsClient {
+export function getNativeNatsClient(client: any): NatsConnection {
   if (client.natsClient) {
     client = client.natsClient;
   }

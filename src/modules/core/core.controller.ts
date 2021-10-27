@@ -1,9 +1,8 @@
-import {Controller} from "@nestjs/common";
-import {MessagePattern} from "@nestjs/microservices";
+import { Controller } from '@nestjs/common';
+import { MessagePattern } from '@nestjs/microservices';
 
 @Controller()
 export class CoreController {
-
   /** Блокчейн боты юзера */
   @MessagePattern(`farmersworld.bot.getUserBots`)
   async getUserBots() {
@@ -37,5 +36,4 @@ export class CoreController {
   /** Вывод NFT токена */
   @MessagePattern(`farmersworld.bot.sendNft`)
   async sendNft() {}
-
 }

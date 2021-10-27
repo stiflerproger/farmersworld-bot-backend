@@ -1,12 +1,12 @@
 import { v4 as uuid4 } from 'uuid';
-import { Client as NatsClient, NatsError } from 'nats';
 import { ApiInterfaces, RpcInterfaces } from 'eosjs';
+import { NatsConnection, StringCodec } from 'nats';
 
 export class NatsSignatureProvider {
   availableKeys: string[];
 
   constructor(
-    private readonly nats: NatsClient,
+    private readonly nats: NatsConnection,
     private readonly nonces: string[],
     private readonly namespace: string,
   ) {}
@@ -52,7 +52,8 @@ export class NatsSignatureProvider {
             requiredKeys: args.requiredKeys,
             serializedTransaction: Array.from(args.serializedTransaction),
             serializedContextFreeData:
-              args.serializedContextFreeData && Array.from(args.serializedContextFreeData),
+              args.serializedContextFreeData &&
+              Array.from(args.serializedContextFreeData),
           },
         },
       },
@@ -67,22 +68,25 @@ export class NatsSignatureProvider {
 }
 
 function natsRequestOne(
-  nats: NatsClient,
+  nats: NatsConnection,
   subject: string,
   msg: any,
   timeout = 15000,
 ): Promise<any> {
-  return new Promise((resolve, reject) => {
-    nats.requestOne(subject, msg, timeout, (data: any) => {
-      if (data instanceof NatsError) {
-        return reject(data);
-      }
+  return new Promise(async (resolve, reject) => {
+    try {
+      const message = await nats.request(subject, msg, {
+        timeout: timeout,
+        noMux: true,
+      });
 
-      if (data && !data.err) {
-        return resolve(data.response);
-      }
+      const sc = StringCodec();
 
-      reject(new Error((data && data.err && data.err.message) || 'Unknown error'));
-    });
+      return resolve(
+        Buffer.isBuffer(message.data) ? sc.decode(message.data) : message.data,
+      );
+    } catch (err) {
+      return reject(err);
+    }
   });
 }

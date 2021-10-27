@@ -4,7 +4,13 @@ import { URL } from 'url';
 import * as crypto from 'crypto';
 import { shuffle as _shuffle } from 'lodash';
 import pMap from 'p-map';
-import nodeFetch, { RequestInfo, RequestInit, Request, Response, Headers } from 'node-fetch';
+import nodeFetch, {
+  RequestInfo,
+  RequestInit,
+  Request,
+  Response,
+  Headers,
+} from 'node-fetch';
 import nodeFetchCookieDecorator from 'fetch-cookie/node-fetch';
 import { CookieJar } from 'tough-cookie';
 import { HttpProxyAgent, HttpsProxyAgent } from 'hpagent';
@@ -18,13 +24,18 @@ const ENDPOINTS_HEALTH_CHECK = {
 
 setInterval(checkEndpointsHealth, 600000); // 10 минут
 
-export function configureFetch(options?: FetchConfigurationOptions): FetchFunction {
+export function configureFetch(
+  options?: FetchConfigurationOptions,
+): FetchFunction {
   options = { ...options };
 
   const onCookieUpdateHandlers: ((jar: CookieJar) => void)[] = [];
 
   let jar = options.cookieJar;
-  let proxy = typeof options.proxy === 'string' ? formatProxyStr(options.proxy) : options.proxy;
+  let proxy =
+    typeof options.proxy === 'string'
+      ? formatProxyStr(options.proxy)
+      : options.proxy;
   let agent = createAgents(proxy);
   let userAgent = options.userAgent;
 
@@ -33,7 +44,9 @@ export function configureFetch(options?: FetchConfigurationOptions): FetchFuncti
   let fetch = jar ? nodeFetchCookieDecorator(nodeFetch, jar) : nodeFetch;
 
   fetchWrapper.getCookieJar = () => jar;
-  fetchWrapper.setCookieJar = (newJar: FetchConfigurationOptions['cookieJar']) => {
+  fetchWrapper.setCookieJar = (
+    newJar: FetchConfigurationOptions['cookieJar'],
+  ) => {
     jar = newJar;
 
     proxyCookieJarSetCookie(jar, onCookieUpdateHandlers);
@@ -46,11 +59,16 @@ export function configureFetch(options?: FetchConfigurationOptions): FetchFuncti
     agent = createAgents(proxy);
   };
   fetchWrapper.getUserAgent = () => userAgent;
-  fetchWrapper.setUserAgent = (newUserAgent: FetchConfigurationOptions['userAgent']) => {
+  fetchWrapper.setUserAgent = (
+    newUserAgent: FetchConfigurationOptions['userAgent'],
+  ) => {
     userAgent = newUserAgent;
   };
 
-  fetchWrapper.createEndpointRewriteProxy = createEndpointRewriteProxy.bind(null, fetchWrapper);
+  fetchWrapper.createEndpointRewriteProxy = createEndpointRewriteProxy.bind(
+    null,
+    fetchWrapper,
+  );
 
   fetchWrapper.onCookieUpdate = (handler: (jar: CookieJar) => void) => {
     onCookieUpdateHandlers.push(handler);
@@ -58,7 +76,10 @@ export function configureFetch(options?: FetchConfigurationOptions): FetchFuncti
 
   return fetchWrapper;
 
-  async function fetchWrapper(url: RequestInfo, init?: RequestInit): Promise<Response> {
+  async function fetchWrapper(
+    url: RequestInfo,
+    init?: RequestInit,
+  ): Promise<Response> {
     [url, init] = normalizeFetchArgs(url, init);
 
     const urlObj = new URL(url);
@@ -111,7 +132,12 @@ function createEndpointRewriteProxy(
 
   let categoryEndpoints: Map<string, EndpointHealthCheck>;
 
-  if (Object.prototype.hasOwnProperty.call(ENDPOINTS_HEALTH_CHECK, options.category)) {
+  if (
+    Object.prototype.hasOwnProperty.call(
+      ENDPOINTS_HEALTH_CHECK,
+      options.category,
+    )
+  ) {
     categoryEndpoints = ENDPOINTS_HEALTH_CHECK[options.category];
 
     for (let i = 0, l = endpoints.length; i < l; i++) {
@@ -191,7 +217,10 @@ function createEndpointRewriteProxy(
   }
 }
 
-function proxyCookieJarSetCookie(jar: CookieJar, handlers: ((jar: CookieJar) => void)[]): void {
+function proxyCookieJarSetCookie(
+  jar: CookieJar,
+  handlers: ((jar: CookieJar) => void)[],
+): void {
   if (!jar || jar[IS_JAR_PROXIFIED]) return;
 
   const setCookie = jar.setCookie;
@@ -231,9 +260,10 @@ function formatProxyStr(proxy: string): URL {
   return proxyUrlObj;
 }
 
-function createAgents(
-  proxy?: URL,
-): { http?: Agent | HttpProxyAgent; https?: HttpsAgent | HttpsProxyAgent } {
+function createAgents(proxy?: URL): {
+  http?: Agent | HttpProxyAgent;
+  https?: HttpsAgent | HttpsProxyAgent;
+} {
   if (proxy) {
     return {
       http: new HttpProxyAgent({
@@ -255,7 +285,10 @@ function createAgents(
   };
 }
 
-function normalizeFetchArgs(url: RequestInfo, init?: RequestInit): [string, RequestInit] {
+function normalizeFetchArgs(
+  url: RequestInfo,
+  init?: RequestInit,
+): [string, RequestInit] {
   init = { ...init };
 
   if (typeof url !== 'string') {
@@ -279,21 +312,32 @@ function checkEndpointsHealth(): void {
   async function update(): Promise<void> {
     const concurrency = 5;
 
-    await pMap(Array.from(ENDPOINTS_HEALTH_CHECK.rpc.values()), checkRpc, { concurrency });
-    await pMap(Array.from(ENDPOINTS_HEALTH_CHECK.hyperionRpc.values()), checkHyperionRpc, {
+    await pMap(Array.from(ENDPOINTS_HEALTH_CHECK.rpc.values()), checkRpc, {
       concurrency,
     });
+    await pMap(
+      Array.from(ENDPOINTS_HEALTH_CHECK.hyperionRpc.values()),
+      checkHyperionRpc,
+      {
+        concurrency,
+      },
+    );
   }
 
   async function checkRpc(info: EndpointHealthCheck): Promise<void> {
     try {
-      const response = await nodeFetch(`https://${info.endpoint}/v1/chain/get_info`, {
-        headers: {
-          'User-Agent': '', // Оставляем пустой User Agent чтобы fetch не использовал значение по умолчанию
+      const response = await nodeFetch(
+        `https://${info.endpoint}/v1/chain/get_info`,
+        {
+          headers: {
+            'User-Agent': '', // Оставляем пустой User Agent чтобы fetch не использовал значение по умолчанию
+          },
         },
-      });
+      );
       const body = await response.json();
-      const headBlockTime = new Date(body.head_block_time.replace(/Z$/, '') + 'Z').getTime();
+      const headBlockTime = new Date(
+        body.head_block_time.replace(/Z$/, '') + 'Z',
+      ).getTime();
 
       if (Number.isNaN(headBlockTime) || headBlockTime + 600000 < Date.now()) {
         throw new Error('Head block is too old');
@@ -318,7 +362,9 @@ function checkEndpointsHealth(): void {
 
       for (let i = 0, l = body.health.length; i < l; i++) {
         if (body.health[i].status !== 'OK') {
-          throw new Error(`Service ${body.health[i].service} is not functional`);
+          throw new Error(
+            `Service ${body.health[i].service} is not functional`,
+          );
         }
 
         if (body.health[i].service === 'NodeosRPC') {

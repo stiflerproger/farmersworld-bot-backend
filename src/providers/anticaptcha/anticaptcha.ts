@@ -25,7 +25,7 @@ export class AntiCaptcha {
         softId: SOFT_ID,
       }),
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Content-Type': 'application/json',
       },
     });
@@ -44,7 +44,7 @@ export class AntiCaptcha {
         clientKey: this.apiKey,
       }),
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Content-Type': 'application/json',
       },
     });
@@ -71,7 +71,7 @@ export class AntiCaptcha {
         clientKey: this.apiKey,
       }),
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Content-Type': 'application/json',
       },
     });
@@ -92,7 +92,11 @@ export class AntiCaptcha {
       try {
         result = await this.getTaskResult(taskId);
       } catch (e) {
-        if (e instanceof AntiCaptchaError && e.code === 'ERROR_NO_SUCH_CAPCHA_ID') throw e;
+        if (
+          e instanceof AntiCaptchaError &&
+          e.code === 'ERROR_NO_SUCH_CAPCHA_ID'
+        )
+          throw e;
 
         if (--errorLeftCount >= 0) {
           await this.waitFor(
@@ -182,7 +186,10 @@ function validateNum(
 function checkForError(body: any): void {
   if (body.errorId == 0) return;
 
-  throw new AntiCaptchaError(body.errorDescription || 'Unknown error', body.errorCode);
+  throw new AntiCaptchaError(
+    body.errorDescription || 'Unknown error',
+    body.errorCode,
+  );
 }
 
 export interface CreateTaskOptions {

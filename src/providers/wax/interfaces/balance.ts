@@ -20,7 +20,10 @@ export interface ReserveBalanceOptions {
   timeout?: number;
 }
 
-export type ReserveBalanceClosure<T> = (quantity: Asset, contract: Name) => T | Promise<T>;
+export type ReserveBalanceClosure<T> = (
+  quantity: Asset,
+  contract: Name,
+) => T | Promise<T>;
 
 export interface ReserveBalanceResultWithRelease {
   quantity: Asset;

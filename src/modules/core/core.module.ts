@@ -1,7 +1,7 @@
-import {Module} from "@nestjs/common";
-import {CoreService} from "./core.service";
-import {CoreController} from "./core.controller";
-import {AccountsModule} from "../accounts/accounts.module";
+import { Module } from '@nestjs/common';
+import { CoreService } from './core.service';
+import { CoreController } from './core.controller';
+import { AccountsModule } from '../accounts/accounts.module';
 
 @Module({
   imports: [AccountsModule],
@@ -9,6 +9,4 @@ import {AccountsModule} from "../accounts/accounts.module";
   providers: [CoreService],
   exports: [CoreService],
 })
-export class CoreModule {
-
-}
+export class CoreModule {}

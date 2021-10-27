@@ -68,7 +68,10 @@ export function getEnv<T = string>(
   return value;
 }
 
-export function getEnvOrFail<T = string>(key: string, transformType?: TransformType<T>): T {
+export function getEnvOrFail<T = string>(
+  key: string,
+  transformType?: TransformType<T>,
+): T {
   const value = getEnv(key, transformType);
 
   if (typeof value === 'undefined') {

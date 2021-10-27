@@ -135,7 +135,8 @@ export class AtomicMarket {
           listing_price: price.to_string(), // 8 цифр после запятой
           maker_marketplace: '.',
           seller: this.#wax.userAccount,
-          settlement_symbol: price.symbol.precision() + ',' + price.symbol.code().to_string(),
+          settlement_symbol:
+            price.symbol.precision() + ',' + price.symbol.code().to_string(),
         },
         authorization: [
           {
@@ -201,7 +202,10 @@ export class AtomicMarket {
   /**
    * Произвести закупку количества предметов из заданного массива (обязательно сравнить количество купленных предметов!)
    */
-  async buyBySales(sales: Sale[], amountToBuy: number): Promise<TransactResult[]> {
+  async buyBySales(
+    sales: Sale[],
+    amountToBuy: number,
+  ): Promise<TransactResult[]> {
     if (typeof amountToBuy !== 'number' || !amountToBuy)
       throw new Error('Set `amountToBuy` parameter');
 
@@ -244,7 +248,9 @@ export class AtomicMarket {
               asset_ids_to_assert: sale.assets.map((e) => e.asset_id),
               listing_price_to_assert: salePrice.to_string(),
               settlement_symbol_to_assert:
-                salePrice.symbol.precision() + ',' + salePrice.symbol.code().to_string(),
+                salePrice.symbol.precision() +
+                ',' +
+                salePrice.symbol.code().to_string(),
             },
             authorization: [
               {

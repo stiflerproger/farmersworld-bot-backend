@@ -1,9 +1,8 @@
-import {Controller} from "@nestjs/common";
-import {MessagePattern} from "@nestjs/microservices";
+import { Controller } from '@nestjs/common';
+import { MessagePattern } from '@nestjs/microservices';
 
 @Controller()
 export class AccountsController {
-
   /** Информация юзера, не привязанная к блокчейну,  */
   @MessagePattern(`server.account.getUser`)
   async getUserByTelegramId() {}
@@ -21,5 +20,4 @@ export class AccountsController {
   async getUserEosioAccounts() {
     // у каждого аккаунта есть список активных игр
   }
-
 }

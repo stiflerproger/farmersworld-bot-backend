@@ -1,14 +1,13 @@
 // пул для работы на карте "mining"
 
-import {Worker} from "../interfaces/worker";
+import { Worker } from '../interfaces/worker';
 import * as eosCommon from 'eos-common';
-import {AccountFwTool} from "../interfaces/fw-tools";
-import {waitFor} from "@utils/wait-for";
-import {TransactResult} from "eosjs/dist/eosjs-api-interfaces";
-import {FarmersWorld} from "@providers/farmersworld";
+import { AccountFwTool } from '../interfaces/fw-tools';
+import { waitFor } from '@utils/wait-for';
+import { TransactResult } from 'eosjs/dist/eosjs-api-interfaces';
+import { FarmersWorld } from '@providers/farmersworld';
 
 export const startWorker: Worker = function (farmer: FarmersWorld) {
-
   let stopped = false,
     timeoutId: NodeJS.Timeout,
     withdrawStopHook: Function,
@@ -16,8 +15,8 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
     claimTimeoutIds: {
       [key: string]: {
         startAt: number | null; // время когда таймаут запустится
-        timeout: NodeJS.Timeout
-      }
+        timeout: NodeJS.Timeout;
+      };
     } = {}; // для каждого инструмента свой таймаут
 
   const toolRepairLimit = 51, // ремонт инструмента если ниже этого
@@ -43,7 +42,7 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
     }
 
     withdrawStopHook?.(); // отменяем запланированный вывод токенов
-  }
+  };
 
   /** перезапуск процесса */
   function rerun(ms) {
@@ -66,43 +65,55 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
   /** Восстановление энергии и починка инструментов, как отдельный процесс */
   function start() {
     // начало работы воркера
-    farmer.logger.log('Старт...')
+    farmer.logger.log('Старт...');
 
     if (stopped) return;
 
     getActions()
-      .then(async refillData => {
-
+      .then(async (refillData) => {
         if (stopped) return;
 
         if (refillData.withdraw?.length) {
-
           if (typeof withdrawStopHook === 'function') {
             withdrawStopHook();
           }
 
-          farmer.logger.log(`Пора выводить ресурсы: [${refillData.withdraw.map(eosAsset => eosAsset.quantity.toString()).join(', ')}]`);
+          farmer.logger.log(
+            `Пора выводить ресурсы: [${refillData.withdraw
+              .map((eosAsset) => eosAsset.quantity.toString())
+              .join(', ')}]`,
+          );
 
-          const stopHook = await farmer.withdrawTokens(refillData.withdraw, {fee: 6, timeout: true});
+          const stopHook = await farmer.withdrawTokens(refillData.withdraw, {
+            fee: 6,
+            timeout: true,
+          });
 
           if (typeof stopHook === 'function') {
             withdrawStopHook = stopHook;
           } else {
             // вывод сделался сразу, т.к. комиссия подошла
             withdrawStopHook = null;
-            farmer.logger.log(`Ресурсы успешно выведены: [${refillData.withdraw.map(eosAsset => eosAsset.quantity.toString()).join(', ')}]`);
+            farmer.logger.log(
+              `Ресурсы успешно выведены: [${refillData.withdraw
+                .map((eosAsset) => eosAsset.quantity.toString())
+                .join(', ')}]`,
+            );
           }
-
         }
 
         const woodBalance = await farmer.bot.wax.getBalance({
           token: 'FWW',
         });
 
-        if (woodBalance.quantity.amount.toJSNumber() >= woodToWaxLimit * Math.pow(10, woodBalance.quantity.symbol.precision())) {
-
+        if (
+          woodBalance.quantity.amount.toJSNumber() >=
+          woodToWaxLimit * Math.pow(10, woodBalance.quantity.symbol.precision())
+        ) {
           // нужно обменять дерево на вакс
-          farmer.logger.log(`Нужно обменять FWW на WAX: [${woodBalance.quantity.toString()}]`);
+          farmer.logger.log(
+            `Нужно обменять FWW на WAX: [${woodBalance.quantity.toString()}]`,
+          );
 
           const result = await farmer.bot.wax.swapToWax([woodBalance]);
 
@@ -111,28 +122,41 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
             return rerun(10 * 60 * 1000);
           }
 
-          farmer.logger.log(`Обмен завершен: [${result.received.quantity.toString()}]`);
+          farmer.logger.log(
+            `Обмен завершен: [${result.received.quantity.toString()}]`,
+          );
 
           if (stopped) return;
           clearTimeout(timeoutId);
           timeoutId = setTimeout(start, 60 * 1000); // через минуту после обмена повторяем запуск
           return;
-
         }
 
         if (refillData.alcor?.length) {
           // обмениваем с алкора
-          farmer.logger.log(`Нужно обменять ресурсы с Alcor: [${refillData.alcor.map(eosAsset => eosAsset.quantity.toString()).join(', ')}]`);
+          farmer.logger.log(
+            `Нужно обменять ресурсы с Alcor: [${refillData.alcor
+              .map((eosAsset) => eosAsset.quantity.toString())
+              .join(', ')}]`,
+          );
 
-          const res = await farmer.bot.wax.swapFromWax(refillData.alcor, {slippage: 5});
+          const res = await farmer.bot.wax.swapFromWax(refillData.alcor, {
+            slippage: 5,
+          });
 
           if (res.unswapped?.length) {
-            farmer.logger.error('Не удалось купить валюту. Пробуем через 15 минут');
+            farmer.logger.error(
+              'Не удалось купить валюту. Пробуем через 15 минут',
+            );
             rerun(15 * 60 * 1000);
             return;
           }
 
-          farmer.logger.log(`Ресурсы куплены: [${res.received.map(eosAsset => eosAsset.quantity.toString()).join(', ')}] [-${res.spent.toFixed(8)} WAX]`);
+          farmer.logger.log(
+            `Ресурсы куплены: [${res.received
+              .map((eosAsset) => eosAsset.quantity.toString())
+              .join(', ')}] [-${res.spent.toFixed(8)} WAX]`,
+          );
 
           if (stopped) return;
           clearTimeout(timeoutId);
@@ -142,7 +166,11 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
 
         if (refillData.deposit?.length) {
           // депозитим баланс внутрь игры
-          farmer.logger.log(`Нужно задепозитить ресурсы: [${refillData.deposit.map(eosAsset => eosAsset.quantity.toString()).join(', ')}]`);
+          farmer.logger.log(
+            `Нужно задепозитить ресурсы: [${refillData.deposit
+              .map((eosAsset) => eosAsset.quantity.toString())
+              .join(', ')}]`,
+          );
 
           await farmer.depositTokens(refillData.deposit);
 
@@ -168,7 +196,9 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
           return;
         }
 
-        farmer.logger.log('Инструменты и энергия на достаточном уровне. Новая проверка через 5 часов!');
+        farmer.logger.log(
+          'Инструменты и энергия на достаточном уровне. Новая проверка через 5 часов!',
+        );
 
         clearTimeout(timeoutId);
         timeoutId = setTimeout(start, 5 * 60 * 60 * 1000); // раз в 5 часов проверять необходимость починки инструментов
@@ -177,49 +207,49 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
           claimStarted = true;
           setTimeout(addAllToClaim, 5000); // запускаем отдельный процесс для сбора ресурсов
         }
-
       })
-      .catch(e => {
+      .catch((e) => {
         farmer.logger.error(e);
 
         return rerun(60 * 1000);
-      })
-
+      });
   }
 
   /** Получить информацию о необходимых действиях на аккаунте */
   async function getActions(): Promise<{
-    alcor?: eosCommon.ExtendedAsset[], // нужно обменять с алкора
-    deposit?: eosCommon.ExtendedAsset[], // нужно депнуть на внутриигровой счёт
-    withdraw?: eosCommon.ExtendedAsset[], // лишние ресурсы на аккаунте
-    refill?: boolean, // нужно починиться или восстановить энергию
+    alcor?: eosCommon.ExtendedAsset[]; // нужно обменять с алкора
+    deposit?: eosCommon.ExtendedAsset[]; // нужно депнуть на внутриигровой счёт
+    withdraw?: eosCommon.ExtendedAsset[]; // лишние ресурсы на аккаунте
+    refill?: boolean; // нужно починиться или восстановить энергию
   }> {
-
     const goldNeeded = {
-      repair: 0,
-      subRepair: 0,
-    }, foodNeeded = {
-      refill: 0,
-      subRefill: 0,
-    };
+        repair: 0,
+        subRepair: 0,
+      },
+      foodNeeded = {
+        refill: 0,
+        subRefill: 0,
+      };
 
     const stats = await farmer.getAccountStats();
     const tools = await farmer.getAccountTools();
 
-    const woodWithdraw = stats.balance.wood >= woodWithdrawLimit
-      ? [
-        new eosCommon.ExtendedAsset(
-          Math.floor(Math.pow(10, 4) * stats.balance.wood),
-          new eosCommon.ExtendedSymbol(eosCommon.symbol('FWW', 4))
-        )
-      ]
-      : undefined;
+    const woodWithdraw =
+      stats.balance.wood >= woodWithdrawLimit
+        ? [
+            new eosCommon.ExtendedAsset(
+              Math.floor(Math.pow(10, 4) * stats.balance.wood),
+              new eosCommon.ExtendedSymbol(eosCommon.symbol('FWW', 4)),
+            ),
+          ]
+        : undefined;
 
-    for (let tool of tools) {
+    for (const tool of tools) {
       if (tool.current_durability < toolRepairLimit) {
         goldNeeded.repair += (tool.durability - tool.current_durability) * 0.2; // 0.2 GOLD за единицу починки
       } else if (tool.current_durability < toolSubRepairLimit) {
-        goldNeeded.subRepair += (tool.durability - tool.current_durability) * 0.2;
+        goldNeeded.subRepair +=
+          (tool.durability - tool.current_durability) * 0.2;
       }
     }
 
@@ -234,13 +264,13 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
 
       return {
         refill: false,
-        withdraw: woodWithdraw
+        withdraw: woodWithdraw,
       };
     }
 
     // общее количество недостающего ресурса для восполнения
-    let depositGoldNeeded = (goldNeeded.repair + goldNeeded.subRepair),
-      depositFoodNeeded = (foodNeeded.refill + foodNeeded.subRefill);
+    let depositGoldNeeded = goldNeeded.repair + goldNeeded.subRepair,
+      depositFoodNeeded = foodNeeded.refill + foodNeeded.subRefill;
 
     // вычесть текущий внутриирговой баланс
     depositGoldNeeded -= stats.balance.gold;
@@ -250,7 +280,6 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
     depositFoodNeeded = Math.max(0, depositFoodNeeded);
 
     if (depositGoldNeeded > 0 || depositFoodNeeded > 0) {
-
       // нужно задепозитить какое-то количество ресурсов в игру
       // вычисляем сколько ресурсов нужно обменять с алкора
 
@@ -266,7 +295,7 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
           Math.pow(10, 4) * depositFoodNeeded,
           eosCommon.symbol('FWF', 4),
         ),
-        null
+        null,
       );
 
       return {
@@ -275,46 +304,46 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
         alcor: exchange.alcor,
         withdraw: woodWithdraw,
       };
-
     }
 
     return {
       refill: true, // просто восстанавливаемся
     };
-
   }
 
   async function repairAndRefill() {
-
     const stats = await farmer.getAccountStats();
     const tools = await farmer.getAccountTools();
 
     if (stopped) return;
 
-    for (let tool of tools) {
+    for (const tool of tools) {
       if (
-        (tool.current_durability < toolRepairLimit || tool.current_durability < toolSubRepairLimit)
-        && stats.balance.gold >= (tool.durability - tool.current_durability) * 0.2
+        (tool.current_durability < toolRepairLimit ||
+          tool.current_durability < toolSubRepairLimit) &&
+        stats.balance.gold >= (tool.durability - tool.current_durability) * 0.2
       ) {
-
         if (stopped) return;
 
-        farmer.logger.log(`Ремонт..${tool.asset_id} (${tool.template.template_name})`);
+        farmer.logger.log(
+          `Ремонт..${tool.asset_id} (${tool.template.template_name})`,
+        );
         // починить и снять с текущего баланса
         await farmer.repair(tool);
 
-        farmer.logger.log(`Ремонт..${tool.asset_id} (${tool.template.template_name})`);
+        farmer.logger.log(
+          `Ремонт..${tool.asset_id} (${tool.template.template_name})`,
+        );
 
         await waitFor(5000);
-
       }
     }
 
     if (
-      (stats.energy.current < energyRefillLimit || stats.energy.current < energySubRefillLimit)
-      && stats.balance.food >= (stats.energy.max - stats.energy.current) * 0.2
+      (stats.energy.current < energyRefillLimit ||
+        stats.energy.current < energySubRefillLimit) &&
+      stats.balance.food >= (stats.energy.max - stats.energy.current) * 0.2
     ) {
-
       if (stopped) return;
 
       farmer.logger.log(`Восставновление энергии..`);
@@ -322,34 +351,38 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
       await farmer.energyRecover(stats.energy.max - stats.energy.current);
 
       await waitFor(5000);
-
     }
 
-    farmer.logger.log('Инструменты успешно отремонтированы, и энергия восстановлена');
+    farmer.logger.log(
+      'Инструменты успешно отремонтированы, и энергия восстановлена',
+    );
 
     return;
-
   }
 
   /** Добавление новых инструментов в очередь сбора ресурсов. Те что уже в очереди игнорируются (т.е. можно вызывать постоянно, ничего не дублируется) */
   function addAllToClaim() {
-
     if (stopped) return;
 
-    farmer.getAccountTools()
-      .then(tools => {
-
+    farmer
+      .getAccountTools()
+      .then((tools) => {
         if (stopped) return;
 
         for (const tool of tools) {
-
           if (claimTimeoutIds[tool.asset_id]?.startAt) continue;
 
-          const claimOn = new Date((tool.next_availability * 1000) + Math.floor(Math.random() * (30000 - 2000)) + 2000); // +(2-30)sec
+          const claimOn = new Date(
+            tool.next_availability * 1000 +
+              Math.floor(Math.random() * (30000 - 2000)) +
+              2000,
+          ); // +(2-30)sec
 
           // проверить инструмент на починку
           if (tool.current_durability - tool.template.durability_consumed < 0) {
-            farmer.logger.error('Инструмент не может использоваться! ' + tool.asset_id);
+            farmer.logger.error(
+              'Инструмент не может использоваться! ' + tool.asset_id,
+            );
             // TODO: ситуаиця теоритически невозможная, но можно будет обрабатывать
             continue;
           }
@@ -357,26 +390,26 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
           const claimAfter = claimOn.getTime() - Date.now();
 
           const min = Math.floor(claimAfter / 1000 / 60),
-            sec = Math.floor((claimAfter / 1000) - (min * 60));
+            sec = Math.floor(claimAfter / 1000 - min * 60);
 
-          farmer.logger.log(`${tool.asset_id} использование через: ${min}:${sec}`);
+          farmer.logger.log(
+            `${tool.asset_id} использование через: ${min}:${sec}`,
+          );
 
-          if (claimTimeoutIds[tool.asset_id]) delete claimTimeoutIds[tool.asset_id];
+          if (claimTimeoutIds[tool.asset_id])
+            delete claimTimeoutIds[tool.asset_id];
 
           claimTimeoutIds[tool.asset_id] = {
             startAt: claimOn.getTime(),
             timeout: setTimeout(() => claim(tool), claimAfter),
-          }
-
+          };
         }
-
       })
-      .catch(e => {
+      .catch((e) => {
         farmer.logger.error(e);
 
         return rerun(60 * 1000);
-      })
-
+      });
   }
 
   function claim(tool: AccountFwTool) {
@@ -384,18 +417,22 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
 
     farmer.logger.log(`${tool.asset_id} сбор ресурсов...`);
 
-    farmer.claim(Number(tool.asset_id))
-      .then(res => {
-
+    farmer
+      .claim(Number(tool.asset_id))
+      .then((res) => {
         if (stopped) return;
 
-        const inlineTraces = (res as TransactResult).processed.action_traces[0].inline_traces;
+        const inlineTraces = (res as TransactResult).processed.action_traces[0]
+          .inline_traces;
 
         let reward = '';
 
-        for (let trace of inlineTraces) {
-          if (trace.act.name === "logbonus") reward = reward + ` BONUS [${trace.act.data.bonus_rewards.join(", ")}]`;
-          if (trace.act.name === "logclaim") reward = `[${trace.act.data.rewards.join(", ")}]` + reward;
+        for (const trace of inlineTraces) {
+          if (trace.act.name === 'logbonus')
+            reward =
+              reward + ` BONUS [${trace.act.data.bonus_rewards.join(', ')}]`;
+          if (trace.act.name === 'logclaim')
+            reward = `[${trace.act.data.rewards.join(', ')}]` + reward;
         }
 
         if (!reward) throw 'Не получен reward. Перезапуск.';
@@ -406,14 +443,13 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
         delete claimTimeoutIds[tool.asset_id];
 
         // проверить есть ли в ближайшие 30 секунд другие сборы ресурсов, если есть, то новые claim запустят они
-        for (let assetId in claimTimeoutIds) {
+        for (const assetId in claimTimeoutIds) {
           if (claimTimeoutIds[assetId].startAt - Date.now() < 30000) return; // раньше чем через 30сек будет работать другой инструмент
         }
 
         if (stopped) return;
 
         setTimeout(addAllToClaim, 5000); // запросить с блокчейна актуальные кулдауны инструментов
-
       })
       .catch((e) => {
         // очищаем все таймеры и перезапускаем всё
@@ -423,7 +459,5 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
 
         return rerun(10 * 60 * 1000);
       });
-
   }
-
-}
+};

@@ -1,8 +1,15 @@
 import * as path from 'path';
 import { sync as globSync } from 'glob';
 
-export function readConfig(pattern?: string | string[], options?: ReadConfigOptions): any[] {
-  if (typeof pattern === 'object' && pattern !== null && !Array.isArray(pattern)) {
+export function readConfig(
+  pattern?: string | string[],
+  options?: ReadConfigOptions,
+): any[] {
+  if (
+    typeof pattern === 'object' &&
+    pattern !== null &&
+    !Array.isArray(pattern)
+  ) {
     options = pattern;
     pattern = undefined;
   } else if (!options) {
@@ -33,7 +40,9 @@ export function readConfig(pattern?: string | string[], options?: ReadConfigOpti
   const matches: string[] = [];
 
   if (typeof pattern === 'string') {
-    matches.push(...globSync(path.isAbsolute(pattern) ? pattern : path.resolve(pattern)));
+    matches.push(
+      ...globSync(path.isAbsolute(pattern) ? pattern : path.resolve(pattern)),
+    );
   }
 
   for (let i = 0, l = matches.length; i < l; i++) {

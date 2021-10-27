@@ -1,6 +1,6 @@
-import {Inject, Injectable, Logger, OnModuleInit} from "@nestjs/common";
-import {Bot} from "@providers/bot";
-import {AccountsService} from "../accounts/accounts.service";
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Bot } from '@providers/bot';
+import { AccountsService } from '../accounts/accounts.service';
 
 @Injectable()
 export class CoreService implements OnModuleInit {
@@ -11,14 +11,12 @@ export class CoreService implements OnModuleInit {
   constructor(
     @Inject(AccountsService)
     private readonly accountsService: AccountsService,
-  ) { }
+  ) {}
 
   async onModuleInit() {
-
     const userAccounts = await this.accountsService.getAllAccounts();
 
     // TODO: из полученных с БД аккаунтов, создавать ботов
     //const bot = new Bot()
-
   }
 }

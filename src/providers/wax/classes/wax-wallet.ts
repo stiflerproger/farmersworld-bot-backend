@@ -1,13 +1,17 @@
 import { EventEmitter } from 'events';
 import { CookieJar } from 'tough-cookie';
 import { ApiInterfaces, RpcInterfaces } from 'eosjs';
-import { AntiCaptcha, RecaptchaV2TaskProxylessResult } from '@providers/anticaptcha';
+import {
+  AntiCaptcha,
+  RecaptchaV2TaskProxylessResult,
+} from '@providers/anticaptcha';
 import { FetchFunction } from '@utils/custom-fetch';
 import { gen2fa } from '@utils/totp';
 import { WaxWebError } from '../exceptions';
 import { WaxOptions, WaxLoginDetails } from '../interfaces';
 
-const DEFAULT_RECAPTCHA_WEBSITE_KEY = '6LdaB7UUAAAAAD2w3lLYRQJqsoup5BsYXI2ZIpFF';
+const DEFAULT_RECAPTCHA_WEBSITE_KEY =
+  '6LdaB7UUAAAAAD2w3lLYRQJqsoup5BsYXI2ZIpFF';
 const SIGN_CAPTCHA_BYPASS_INFO = {
   /**
    * В течение какого периода решать капчу после того как получили ошибку
@@ -140,7 +144,10 @@ export class WaxWallet extends EventEmitter {
         );
     }
 
-    function toPromise<T = any>(func: (...args: any[]) => any, ...args: any[]): Promise<T> {
+    function toPromise<T = any>(
+      func: (...args: any[]) => any,
+      ...args: any[]
+    ): Promise<T> {
       try {
         return Promise.resolve(func(...args));
       } catch (e) {
@@ -149,7 +156,10 @@ export class WaxWallet extends EventEmitter {
     }
   };
 
-  constructor(fetch: FetchFunction, options: WaxOptions['waxManagedAccountOptions']) {
+  constructor(
+    fetch: FetchFunction,
+    options: WaxOptions['waxManagedAccountOptions'],
+  ) {
     super();
 
     if (!options.anticaptcha) {
@@ -159,7 +169,8 @@ export class WaxWallet extends EventEmitter {
     this.#fetch = fetch;
 
     this.anticaptcha = options.anticaptcha;
-    this.recaptchaWebsiteKey = options.recaptchaWebsiteKey || DEFAULT_RECAPTCHA_WEBSITE_KEY;
+    this.recaptchaWebsiteKey =
+      options.recaptchaWebsiteKey || DEFAULT_RECAPTCHA_WEBSITE_KEY;
 
     // Отправляем евент когда куки будут обновляться
     fetch.onCookieUpdate(this.emit.bind(this, 'cookieUpdate'));
@@ -184,7 +195,9 @@ export class WaxWallet extends EventEmitter {
 
     this.#autoReLoginDetails = autoReLoginDetails;
 
-    function formatAutoReLoginDetails(details: WaxLoginDetails): AutoReLoginDetails {
+    function formatAutoReLoginDetails(
+      details: WaxLoginDetails,
+    ): AutoReLoginDetails {
       if (details.autoReLogin == null) {
         return null;
       } else if (typeof details.autoReLogin !== 'function') {
@@ -234,12 +247,15 @@ export class WaxWallet extends EventEmitter {
    * Проверка авторизации, а также обновления данных авторизации
    */
   async loggedIn(): Promise<boolean> {
-    const sessionResponse = await this.#fetch('https://all-access.wax.io/api/session', {
-      method: 'GET',
-      headers: {
-        Referer: 'https://all-access.wax.io/cloud-wallet/login/',
+    const sessionResponse = await this.#fetch(
+      'https://all-access.wax.io/api/session',
+      {
+        method: 'GET',
+        headers: {
+          Referer: 'https://all-access.wax.io/cloud-wallet/login/',
+        },
       },
-    });
+    );
 
     if (!sessionResponse.ok) {
       this.#handleSessionExpire();
@@ -255,13 +271,16 @@ export class WaxWallet extends EventEmitter {
       return false;
     }
 
-    const accountResponse = await this.#fetch('https://public-wax-on.wax.io/wam/users', {
-      method: 'GET',
-      headers: {
-        'Referer': 'https://all-access.wax.io/',
-        'X-Access-Token': sessionBody.token,
+    const accountResponse = await this.#fetch(
+      'https://public-wax-on.wax.io/wam/users',
+      {
+        method: 'GET',
+        headers: {
+          Referer: 'https://all-access.wax.io/',
+          'X-Access-Token': sessionBody.token,
+        },
       },
-    });
+    );
 
     if (!accountResponse.ok) {
       this.#handleSessionExpire();
@@ -321,7 +340,11 @@ export class WaxWallet extends EventEmitter {
     try {
       signatures = await getSignatures.call(this, recaptcha);
     } catch (e) {
-      if (e instanceof WaxWebError && e.code === 'INCORRECT_CAPTCHA' && !recaptcha) {
+      if (
+        e instanceof WaxWebError &&
+        e.code === 'INCORRECT_CAPTCHA' &&
+        !recaptcha
+      ) {
         signatures = await getSignatures.call(
           this,
           await solveCaptcha.call(this, 'https://all-access.wax.io/'),
@@ -340,20 +363,25 @@ export class WaxWallet extends EventEmitter {
       this: WaxWallet,
       recaptcha?: RecaptchaV2TaskProxylessResult,
     ): Promise<string[]> {
-      const response = await this.#fetch('https://public-wax-on.wax.io/wam/sign', {
-        method: 'POST',
-        body: JSON.stringify({
-          'g-recaptcha-response': recaptcha ? recaptcha.gRecaptchaResponse : undefined,
-          'serializedTransaction': Object.values(args.serializedTransaction),
-          'website': args.website || 'wax.bloks.io',
-          'description': 'jwt is insecure',
-        }),
-        headers: {
-          'Content-Type': 'application/json;charset=UTF-8',
-          'Referer': 'https://all-access.wax.io/',
-          'X-Access-Token': accessToken,
+      const response = await this.#fetch(
+        'https://public-wax-on.wax.io/wam/sign',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            'g-recaptcha-response': recaptcha
+              ? recaptcha.gRecaptchaResponse
+              : undefined,
+            serializedTransaction: Object.values(args.serializedTransaction),
+            website: args.website || 'wax.bloks.io',
+            description: 'jwt is insecure',
+          }),
+          headers: {
+            'Content-Type': 'application/json;charset=UTF-8',
+            Referer: 'https://all-access.wax.io/',
+            'X-Access-Token': accessToken,
+          },
         },
-      });
+      );
       const body = await response.json();
 
       if (body.error) {
@@ -364,7 +392,8 @@ export class WaxWallet extends EventEmitter {
         }
 
         if (/Recaptcha token is invalid/i.test(body.message)) {
-          SIGN_CAPTCHA_BYPASS_INFO.solveUntil = Date.now() + SIGN_CAPTCHA_BYPASS_INFO.interval;
+          SIGN_CAPTCHA_BYPASS_INFO.solveUntil =
+            Date.now() + SIGN_CAPTCHA_BYPASS_INFO.interval;
 
           if (recaptcha) {
             try {
@@ -374,10 +403,15 @@ export class WaxWallet extends EventEmitter {
             }
           }
 
-          throw new WaxWebError('Incorrect captcha response', 'INCORRECT_CAPTCHA');
+          throw new WaxWebError(
+            'Incorrect captcha response',
+            'INCORRECT_CAPTCHA',
+          );
         }
 
-        throw new WaxWebError(`${body.error}: ${body.message || 'Unknown transaction sign error'}`);
+        throw new WaxWebError(
+          `${body.error}: ${body.message || 'Unknown transaction sign error'}`,
+        );
       }
 
       // На всякий случай оставляем и обработку массива errors
@@ -385,7 +419,9 @@ export class WaxWallet extends EventEmitter {
         let errorDescriptions = 'Unknown transaction sign error';
 
         if (Array.isArray(body.errors)) {
-          errorDescriptions = body.errors.map((err: any) => err && err.message).join('\n');
+          errorDescriptions = body.errors
+            .map((err: any) => err && err.message)
+            .join('\n');
         }
 
         throw new WaxWebError(errorDescriptions, 'TRANSACTION_SIGN_ERROR', {
@@ -394,7 +430,9 @@ export class WaxWallet extends EventEmitter {
       }
 
       if (!Array.isArray(body.signatures)) {
-        throw new WaxWebError('Missing or invalid signatures property in response');
+        throw new WaxWebError(
+          'Missing or invalid signatures property in response',
+        );
       }
 
       return body.signatures;
@@ -462,7 +500,10 @@ async function processLogin(
       await doLogin.call(this);
     } catch (e) {
       if (e instanceof WaxWebError && e.code === 'INCORRECT_CAPTCHA') {
-        await doLogin.call(this, await solveCaptcha.call(this, 'https://all-access.wax.io/'));
+        await doLogin.call(
+          this,
+          await solveCaptcha.call(this, 'https://all-access.wax.io/'),
+        );
       } else {
         throw e;
       }
@@ -478,26 +519,33 @@ async function processLogin(
       this: WaxWallet,
       recaptcha?: RecaptchaV2TaskProxylessResult,
     ): Promise<void> {
-      const loginResponse = await fetch('https://all-access.wax.io/api/session', {
-        method: 'POST',
-        body: JSON.stringify({
-          'password': credentials.password,
-          'username': credentials.username,
-          'g-recaptcha-response': recaptcha ? recaptcha.gRecaptchaResponse : undefined,
-          'redirectTo': '',
-        }),
-        headers: {
-          'Content-Type': 'application/json;charset=UTF-8',
-          'Referer': 'https://all-access.wax.io/',
+      const loginResponse = await fetch(
+        'https://all-access.wax.io/api/session',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            password: credentials.password,
+            username: credentials.username,
+            'g-recaptcha-response': recaptcha
+              ? recaptcha.gRecaptchaResponse
+              : undefined,
+            redirectTo: '',
+          }),
+          headers: {
+            'Content-Type': 'application/json;charset=UTF-8',
+            Referer: 'https://all-access.wax.io/',
+          },
         },
-      });
+      );
       const loginBody = await loginResponse.json();
 
       if (loginBody.errors) {
         let errorDescriptions = 'Unknown login error';
 
         if (Array.isArray(loginBody.errors)) {
-          errorDescriptions = loginBody.errors.map((err: any) => err && err.message).join('\n');
+          errorDescriptions = loginBody.errors
+            .map((err: any) => err && err.message)
+            .join('\n');
         }
 
         if (/Incorrect captcha/i.test(errorDescriptions)) {
@@ -509,7 +557,10 @@ async function processLogin(
             }
           }
 
-          throw new WaxWebError('Incorrect captcha response', 'INCORRECT_CAPTCHA');
+          throw new WaxWebError(
+            'Incorrect captcha response',
+            'INCORRECT_CAPTCHA',
+          );
         }
 
         throw new WaxWebError(errorDescriptions, 'LOGIN_ERROR', {
@@ -534,24 +585,29 @@ async function processLogin(
         throw new WaxWebError('2FA required', '2FA_REQUIRED');
       }
 
-      const twofaResponse = await fetch('https://all-access.wax.io/api/session/2fa', {
-        method: 'POST',
-        body: JSON.stringify({
-          code: gen2fa(credentials.totpSecret),
-          token2fa,
-        }),
-        headers: {
-          'Content-Type': 'application/json;charset=UTF-8',
-          'Referer': `https://all-access.wax.io/2fa?token2fa=${token2fa}`,
+      const twofaResponse = await fetch(
+        'https://all-access.wax.io/api/session/2fa',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            code: gen2fa(credentials.totpSecret),
+            token2fa,
+          }),
+          headers: {
+            'Content-Type': 'application/json;charset=UTF-8',
+            Referer: `https://all-access.wax.io/2fa?token2fa=${token2fa}`,
+          },
         },
-      });
+      );
       const twofaBody = await twofaResponse.json();
 
       if (twofaBody.errors) {
         let errorDescriptions = 'Unknown 2fa commit error';
 
         if (Array.isArray(twofaBody.errors)) {
-          errorDescriptions = twofaBody.errors.map((err: any) => err && err.message).join('\n');
+          errorDescriptions = twofaBody.errors
+            .map((err: any) => err && err.message)
+            .join('\n');
         }
 
         throw new WaxWebError(errorDescriptions, '2FA_COMMIT_ERROR', {
@@ -568,7 +624,10 @@ async function processLogin(
       }
     }
 
-    async function acceptTos(this: WaxWallet, tandcToken: string): Promise<void> {
+    async function acceptTos(
+      this: WaxWallet,
+      tandcToken: string,
+    ): Promise<void> {
       const tosFormResponse = await fetch('https://all-access.wax.io/api/tos', {
         method: 'GET',
         headers: {
@@ -581,26 +640,31 @@ async function processLogin(
         throw new WaxWebError('Malformed response');
       }
 
-      const tosAcceptResponse = await fetch('https://all-access.wax.io/api/tos', {
-        method: 'POST',
-        body: JSON.stringify({
-          tos_id: tosFormBody.id,
-          tos_accepted: true,
-          age_accepted: true,
-          singleUseToken: tandcToken,
-        }),
-        headers: {
-          'Content-Type': 'application/json;charset=UTF-8',
-          'Referer': `https://all-access.wax.io/tos?token=${tandcToken}`,
+      const tosAcceptResponse = await fetch(
+        'https://all-access.wax.io/api/tos',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            tos_id: tosFormBody.id,
+            tos_accepted: true,
+            age_accepted: true,
+            singleUseToken: tandcToken,
+          }),
+          headers: {
+            'Content-Type': 'application/json;charset=UTF-8',
+            Referer: `https://all-access.wax.io/tos?token=${tandcToken}`,
+          },
         },
-      });
+      );
       const tosAcceptBody = await tosAcceptResponse.json();
 
       if (tosAcceptBody.errors) {
         let errorDescriptions = 'Unknown tos accept error';
 
         if (Array.isArray(tosAcceptBody.errors)) {
-          errorDescriptions = tosAcceptBody.errors.map((err: any) => err && err.message).join('\n');
+          errorDescriptions = tosAcceptBody.errors
+            .map((err: any) => err && err.message)
+            .join('\n');
         }
 
         throw new WaxWebError(errorDescriptions, 'TOS_ACCEPT_ERROR', {

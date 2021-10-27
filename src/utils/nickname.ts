@@ -1,7 +1,14 @@
 import { uniqueNamesGenerator, names, starWars } from 'unique-names-generator';
 
 export function getRandomNickname() {
-  const dictionaries = [[names], [names], [names], [names], [names], [starWars]];
+  const dictionaries = [
+    [names],
+    [names],
+    [names],
+    [names],
+    [names],
+    [starWars],
+  ];
 
   while (true) {
     const nickname = getNickname();
@@ -13,7 +20,8 @@ export function getRandomNickname() {
 
   function getNickname() {
     return uniqueNamesGenerator({
-      dictionaries: dictionaries[Math.floor(Math.random() * dictionaries.length)],
+      dictionaries:
+        dictionaries[Math.floor(Math.random() * dictionaries.length)],
     });
   }
 }
