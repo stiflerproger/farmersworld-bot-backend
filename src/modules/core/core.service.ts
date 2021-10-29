@@ -4,7 +4,7 @@ import { AccountsService } from '../accounts/accounts.service';
 
 @Injectable()
 export class CoreService implements OnModuleInit {
-  readonly #bots: Map<string, Bot> = new Map();
+  readonly #bots: Map<number, Bot> = new Map();
 
   readonly logger = new Logger(CoreService.name);
 
@@ -18,5 +18,27 @@ export class CoreService implements OnModuleInit {
 
     // TODO: из полученных с БД аккаунтов, создавать ботов
     //const bot = new Bot()
+  }
+
+  /** Остановка dapps бота */
+  async disableBotApps(botId: number, dapps: { farmersworld?: true } = {}) {
+
+    const bot = this.#bots.get(botId);
+
+    if (!bot) throw 'Nothing to stop';
+
+    if (dapps?.farmersworld) await bot.farmersworld.disable();
+
+  }
+
+  /** Запуск dapps бота */
+  async enableBotApps(botId: number, dapps: { farmersworld?: true } = {}) {
+
+    const bot = this.#bots.get(botId);
+
+    if (!bot) throw 'Nothing to start';
+
+    if (dapps?.farmersworld) await bot.farmersworld.enable();
+
   }
 }
