@@ -20,6 +20,19 @@ export class CoreService implements OnModuleInit {
     //const bot = new Bot()
   }
 
+  /** Получить инстансы ботов ил списка ID */
+  async getBotsByIds(listIds: number[]) {
+    const res: Bot[] = [];
+
+    for (const i of listIds) {
+      const bot = this.#bots.get(i)
+
+      if (bot) res.push(bot);
+    }
+
+    return res;
+  }
+
   /** Остановка dapps бота */
   async disableBotApps(botId: number, dapps: { farmersworld?: true } = {}) {
 

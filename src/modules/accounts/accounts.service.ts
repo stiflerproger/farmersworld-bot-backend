@@ -17,6 +17,11 @@ export class AccountsService {
     }
   }
 
+  /** Запрос списка ID ботов юзера */
+  async getAccountBotsIds(telegramId: number) {
+    return [1,2];
+  }
+
   /** Получить адрес для пополнения счёта аккаунта */
   async getAccountDeposit(telegramId: number) {
     return {
