@@ -44,8 +44,8 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
     withdrawStopHook?.(); // отменяем запланированный вывод токенов
   };
 
-  /** перезапуск процесса */
-  function rerun(ms) {
+  /** перезапуск процесса (в ошибке указываем причину. Метод может и не перезапустить бота если ошибка CPU или ещё что) */
+  function rerun(ms, error?: any) {
     if (stopped) return;
 
     clearTimeout(timeoutId);
@@ -69,6 +69,7 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
 
     if (stopped) return;
 
+    // TODO: обработчик ситуаций, когда у юзера не хватает реусрсов на обмен или покупку
     getActions()
       .then(async (refillData) => {
         if (stopped) return;
@@ -273,8 +274,8 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
       depositFoodNeeded = foodNeeded.refill + foodNeeded.subRefill;
 
     // вычесть текущий внутриирговой баланс
-    depositGoldNeeded -= stats.balance.gold;
-    depositFoodNeeded -= stats.balance.food;
+    depositGoldNeeded -= stats.balance.gold || 0;
+    depositFoodNeeded -= stats.balance.food || 0;
 
     depositGoldNeeded = Math.max(0, depositGoldNeeded);
     depositFoodNeeded = Math.max(0, depositFoodNeeded);
@@ -312,6 +313,7 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
   }
 
   async function repairAndRefill() {
+    // TODO: сообщать о недостатке ресурсов
     const stats = await farmer.getAccountStats();
     const tools = await farmer.getAccountTools();
 

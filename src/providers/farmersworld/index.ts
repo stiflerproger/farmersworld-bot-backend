@@ -236,7 +236,7 @@ export class FarmersWorld {
     };
 
     if (!userAccount || userAccount === this.bot.wax.userAccount) {
-      this.balance = result.balance;
+      this.balance = result.balance; // TODO: фикс ошибки при 0 баланса
       this.energy = result.energy;
     }
 
