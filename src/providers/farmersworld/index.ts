@@ -236,7 +236,13 @@ export class FarmersWorld {
     };
 
     if (!userAccount || userAccount === this.bot.wax.userAccount) {
-      this.balance = result.balance; // TODO: фикс ошибки при 0 баланса
+
+      this.balance = {
+        food: result.balance?.food || 0,
+        wood: result.balance?.wood || 0,
+        gold: result.balance?.gold || 0,
+      };
+
       this.energy = result.energy;
     }
 
