@@ -85,22 +85,38 @@ export class TelegramService implements OnModuleInit {
     // ===== BOTS =====
 
     this.bot.hears(this.#menu.bots, async (ctx) => {
-      const pageAmount = 10; // количество кнопок ботов на 1 странице
-
-      const newBotPrice = 100; // цена нового бота в центах
-
-      const botsIds = await this.accountsService.getAccountBotsIds(ctx.from.id);
-      const bots = await this.coreService.getBotsByIds(botsIds);
-
       ctx.reply(
-        mBots({
-          newBotPrice
-        }),
-        Markup.inlineKeyboard([
-          Markup.button.callback('➕ Пополнить', 'profile.deposit')
-        ])
+        mBots(),
+        await getBotsPageKeyboard.call(this, ctx.from.id)
       );
     });
+
+    this.bot.action('bots.page.*', async (ctx) => {
+      console.log(ctx)
+    })
+
+    // TODO: test
+    async function getBotsPageKeyboard(this: TelegramService, telegramId: number, page = 1) {
+      const pageAmount = 10; // количество кнопок ботов на 1 странице
+      const newBotPrice = 100; // цена нового бота в центах
+      const botsIds = await this.accountsService.getAccountBotsIds(telegramId);
+      const bots = await this.coreService.getBotsByIds(botsIds);
+
+      const pagination = [];
+
+      if ( bots[ (page - 1) * pageAmount - 1 ] ) pagination.push(Markup.button.callback('< Пред.', 'bots.page.' + (page - 1)))
+      if ( bots[ (page - 1) * pageAmount + pageAmount + 1 ] ) pagination.push(Markup.button.callback('След. >', 'bots.page.' + (page + 1)))
+
+      const keyboard: any = [
+        Markup.button.callback( `➕ Создать -$${newBotPrice / 100}`, 'bots.create'),
+        ...bots
+          .slice((page-1) * pageAmount, (page-1) * pageAmount + pageAmount)
+          .map(bot => Markup.button.callback( `#${bot.id} ${bot.wax.userAccount || ''}`, 'bots.load.' + bot.id)),
+        ...(pagination.length ? [pagination] : []),
+      ];
+
+      return Markup.inlineKeyboard(keyboard);
+    }
 
     await this.bot.launch();
 

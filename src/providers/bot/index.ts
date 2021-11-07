@@ -7,6 +7,7 @@ interface DApps {
 }
 
 interface Settings {
+  id: number; // уникальный ID Бота. МОжно id с БД
   dapps?: {
     farmersworld?: {
       enabled?: boolean;
@@ -16,6 +17,7 @@ interface Settings {
 
 /** Инстанс бота. Управление wax, и всеми DApps */
 export class Bot {
+  readonly id: number;
   readonly wax;
   readonly farmersworld: FarmersWorld;
   readonly logger: Logger;
@@ -27,12 +29,13 @@ export class Bot {
       wax: WaxOptions;
       dapps?: DApps;
     },
-    settings?: Settings,
+    settings: Settings,
   ) {
     if (!options.wax) throw 'Wax options must be set';
 
     this.wax = new Wax(options.wax);
-    this.settings = settings || {};
+    this.settings = settings || { id: 0 };
+    this.id = settings.id;
 
     this.logger = new Logger(this.wax.userAccount);
 

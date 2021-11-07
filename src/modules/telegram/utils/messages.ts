@@ -36,8 +36,6 @@ export const mBalanceAdded = (data: {
 Текущий баланс: <b>$${data.total / 100}</b>
 `;
 
-export const mBots = (data: {newBotPrice: number}) => ` 
-🤖 Список ваших ботов в экосистеме
-
-<code>Добавление нового бота стоит: $${data.newBotPrice / 100}</code> 
+export const mBots = () => ` 
+🤖 Ваши боты в экосистеме 🤖
 `;
