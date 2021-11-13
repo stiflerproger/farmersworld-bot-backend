@@ -313,18 +313,21 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
   }
 
   async function repairAndRefill() {
-    // TODO: сообщать о недостатке ресурсов
     const stats = await farmer.getAccountStats();
     const tools = await farmer.getAccountTools();
 
     if (stopped) return;
 
     for (const tool of tools) {
+
+      const repairGoldNeeded = (tool.durability - tool.current_durability) * 0.2;
+
       if (
         (tool.current_durability < toolRepairLimit ||
           tool.current_durability < toolSubRepairLimit) &&
-        stats.balance.gold >= (tool.durability - tool.current_durability) * 0.2
+        stats.balance.gold >= repairGoldNeeded
       ) {
+
         if (stopped) return;
 
         farmer.logger.log(
@@ -333,11 +336,24 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
         // починить и снять с текущего баланса
         await farmer.repair(tool);
 
+        stats.balance.gold -= repairGoldNeeded;
+
         farmer.logger.log(
           `Ремонт..${tool.asset_id} (${tool.template.template_name})`,
         );
 
         await waitFor(5000);
+
+      } else if (
+        tool.current_durability < toolRepairLimit ||
+        tool.current_durability < toolSubRepairLimit
+      ) {
+
+        // инструмент нужно починить, но ресурсов для этого уже не хватает
+        farmer.logger.error(
+          `Ремонт..${tool.asset_id} (${tool.template.template_name}) | Не хватает GOLD для починки: N[${repairGoldNeeded}] H[${stats.balance.gold}]`,
+        );
+
       }
     }
 
@@ -346,6 +362,7 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
         stats.energy.current < energySubRefillLimit) &&
       stats.balance.food >= (stats.energy.max - stats.energy.current) * 0.2
     ) {
+
       if (stopped) return;
 
       farmer.logger.log(`Восставновление энергии..`);
@@ -353,10 +370,18 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
       await farmer.energyRecover(stats.energy.max - stats.energy.current);
 
       await waitFor(5000);
+
+    } else if (
+      stats.energy.current < energyRefillLimit ||
+      stats.energy.current < energySubRefillLimit
+    ) {
+
+      farmer.logger.error(`Восстановление энергии.. Не хватает FOOD для восстановления: N[${(stats.energy.max - stats.energy.current) * 0.2}] H[${stats.balance.food}]`)
+
     }
 
     farmer.logger.log(
-      'Инструменты успешно отремонтированы, и энергия восстановлена',
+      'Инструменты отремонтированы, энергия восстановлена',
     );
 
     return;
