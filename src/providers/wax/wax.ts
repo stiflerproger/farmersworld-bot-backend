@@ -96,6 +96,10 @@ export class Wax {
     failedTransacts: 0,
     nextTransactAttemptAfter: 0,
   };
+  /** Кэш имеющихся у ключа доступов к контрактам */
+  readonly #permissions: EosPermissions = {
+    updated: 0,
+  };
 
   readonly waxWallet?: WaxWallet;
   readonly api: Api;
@@ -105,6 +109,8 @@ export class Wax {
   readonly atomicMarket: AtomicMarket;
 
   userAccount?: string;
+  /** Имя текущего доступа ключа. Для wax default 'active', для selfManaged установится через getPermissions, который вызовется в transact */
+  permissionName: string = 'active';
 
   get isWaxManagedAccount(): boolean {
     return this.#isWaxManagedAccount;
@@ -120,6 +126,61 @@ export class Wax {
 
   get canTransact(): boolean {
     return this.#transactResources.nextTransactAttemptAfter <= Date.now();
+  }
+
+  /** Возвращает список возможных контрактов для транзакций contract::action, либо 'FULL', если доступ ко всем контрактам открыт */
+  async getPermissions(force = false): Promise<string[] | 'full'> {
+    if (this.isWaxManagedAccount) return 'full'; // для вакс аккаунтов всегда full
+
+    // проверяем актуальность кэша, если прошло не больше часа, то его и вернуть
+    if (Date.now() - (this.#permissions.updated || 0) > 3600000 || force) {
+      const pubKeys = await this.api.signatureProvider.getAvailableKeys();
+
+      const response = await this.#fetch(
+        `https://lightapi.eosamsterdam.net/api/accinfo/wax/${this.userAccount}`,
+        {
+          method: 'GET',
+        },
+      );
+
+      const body = await response.json();
+
+      if (!Array.isArray(body.permissions)) {
+        throw new Error('Malformed lightapi.eosamsterdam.net response');
+      }
+
+      // определяем к какому из permissions принадлежит наш ключ
+      const perm = body.permissions.find((e) =>
+        e.auth?.keys.find((k) => k.public_key === pubKeys[0]),
+      )?.perm;
+
+      if (!perm) throw new Error('Permissions not founded');
+
+      this.permissionName = perm;
+
+      if (perm === 'active' || perm === 'owner') {
+        this.#permissions.data = 'full';
+        this.#permissions.updated = Date.now();
+
+        return 'full';
+      }
+
+      const result: string[] = [];
+
+      if (!Array.isArray(body.linkauth)) return result;
+
+      for (const auth of body.linkauth) {
+        if (auth.requirement === perm)
+          result.push(auth.code + '::' + auth.type);
+      }
+
+      this.#permissions.data = result;
+      this.#permissions.updated = Date.now();
+
+      return result;
+    }
+
+    return this.#permissions.data;
   }
 
   constructor(options: WaxOptions) {
@@ -302,6 +363,46 @@ export class Wax {
 
     if (throwIfNoResources && !this.canTransact) {
       throw new WaxWebError('Not enough resources to transact', 'NO_RESOURCES');
+    }
+
+    const permissions = await this.getPermissions(); // кэш permissions 1 час
+
+    // если массив, то не active или owner
+    if (Array.isArray(permissions)) {
+      // у текущего ключа ограниченный доступ к транзакциям, проверить все actions на возможность транзакции
+      const blockedActions: string[] = [];
+
+      for (const action of transaction.actions) {
+        const allowed = permissions.find(
+          (e) =>
+            e === `${action.account}::${action.name}` ||
+            e === `${action.account}::`,
+        );
+
+        if (!allowed) blockedActions.push(`${action.account}::${action.name}`);
+      }
+
+      if (blockedActions.length) {
+        throw new WaxWebError(
+          `Current key does not have permissions to transact some actions | DENIED: [${blockedActions.join(
+            ', ',
+          )}]`,
+          'PERMISSION_DENIED',
+          {
+            denied: blockedActions,
+          },
+        );
+      }
+    }
+
+    // проверим правильно ли установлена авторизация для транзакции
+    for (const action of transaction.actions) {
+      // вроде всегда указывается только 1 авторизации для action
+      if (action.authorization?.[0].permission !== this.permissionName) {
+        throw new Error(
+          `Wrong permission name. You must use ${this.permissionName} permission! | Given: ${action.authorization?.[0].permission}`,
+        );
+      }
     }
 
     if (!this.api.chainId) {
@@ -2551,4 +2652,10 @@ interface BalanceInfo {
 interface TransactResources {
   failedTransacts: number;
   nextTransactAttemptAfter: number;
+}
+
+interface EosPermissions {
+  /** Время последнего запроса */
+  updated: number;
+  data?: string[] | 'full';
 }
