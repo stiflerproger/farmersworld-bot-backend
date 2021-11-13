@@ -3,10 +3,10 @@ import { CoreModule } from './modules/core/core.module';
 import { RpcExceptionFilter } from './filters/rpc-exception.filter';
 import { commonPipeOptions } from './pipes/common-options';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
-import {readConfig} from "@utils/config";
-import {ConfigModule} from "@nestjs/config";
-import {NatsClientModule} from "./nats-client.module";
-import {TelegramModule} from "./modules/telegram/telegram.module";
+import { readConfig } from '@utils/config';
+import { ConfigModule } from '@nestjs/config';
+import { NatsClientModule } from './nats-client.module';
+import { TelegramModule } from './modules/telegram/telegram.module';
 
 @Module({
   imports: [

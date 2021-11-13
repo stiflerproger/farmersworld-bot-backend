@@ -8,9 +8,7 @@ export const mHello = () => `
 Если вы здесь впервые, то настоятельно рекомендуем ознакомиться с описанием нашей системы, по кнопке "📚 FAQ" на клавиатуре
 `;
 
-export const mProfile = (data: {
-  balance: number
-}) => `
+export const mProfile = (data: { balance: number }) => `
 💵 На Вашем балансе: $${(data.balance / 100).toFixed(2)}
 `;
 
@@ -27,16 +25,13 @@ memo: <code>${data.memo}</code>
 ${data.min ? `<i>минимальный депозит ${data.min} WAX</i>` : ''}
 `;
 
-export const mBalanceAdded = (data: {
-  amount: number;
-  total: number;
-}) => `
+export const mBalanceAdded = (data: { amount: number; total: number }) => `
 💵 Успешное пополнение баланса на <b>$${data.amount / 100}</b> 💵
 
 Текущий баланс: <b>$${data.total / 100}</b>
 `;
 
-export const mBots = (data: {newBotPrice: number}) => ` 
+export const mBots = (data: { newBotPrice: number }) => ` 
 🤖 Список ваших ботов в экосистеме
 
 <code>Добавление нового бота стоит: $${data.newBotPrice / 100}</code> 

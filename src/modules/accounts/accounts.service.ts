@@ -1,25 +1,24 @@
-import {Inject, Injectable} from '@nestjs/common';
-import {ClientProxy} from "@nestjs/microservices";
+import { Inject, Injectable } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 
 @Injectable()
 export class AccountsService {
-
   constructor(
     @Inject('NATS_CLIENT')
-    readonly natsClient: ClientProxy
-  ) { }
+    readonly natsClient: ClientProxy,
+  ) {}
 
   /** Запрос аккаунта с БД по telegramId */
   async getAccount(telegramId: number) {
     return {
       id: 1,
       balance: 125,
-    }
+    };
   }
 
   /** Запрос списка ID ботов юзера */
   async getAccountBotsIds(telegramId: number) {
-    return [1,2];
+    return [1, 2];
   }
 
   /** Получить адрес для пополнения счёта аккаунта */
@@ -28,7 +27,7 @@ export class AccountsService {
       address: 'waxonbackdeposit',
       memo: '246234',
       min: 3, // min wax для депозита (optional)
-    }
+    };
   }
 
   /** Получить все аккаунты  */

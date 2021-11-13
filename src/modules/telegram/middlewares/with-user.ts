@@ -1,7 +1,11 @@
-import {TelegramService} from "../telegram.service";
+import { TelegramService } from '../telegram.service';
 
-export const withUser = async function(this: TelegramService, ctx: TelegramService['bot']['context'], next: Function, force?: boolean) {
-
+export const withUser = async function (
+  this: TelegramService,
+  ctx: TelegramService['bot']['context'],
+  next: Function,
+  force?: boolean,
+) {
   let user = this.users.get(String(ctx.from.id));
 
   if (!user || force) {
@@ -14,5 +18,4 @@ export const withUser = async function(this: TelegramService, ctx: TelegramServi
   ctx.$user = user;
 
   return next();
-
-}
+};

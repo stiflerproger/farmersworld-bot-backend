@@ -1,5 +1,5 @@
-import {IsInt, IsOptional, IsString} from "class-validator";
-import {Type} from "class-transformer";
+import { IsInt, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class SendMessageTemplateDto {
   @IsInt()
@@ -12,5 +12,5 @@ export class SendMessageTemplateDto {
 
   @IsOptional()
   @Type(() => Object)
-  arguments: Record<string, any>
+  arguments: Record<string, any>;
 }
