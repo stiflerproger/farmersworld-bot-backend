@@ -6,6 +6,7 @@ import * as eosCommon from 'eos-common';
 import { Asset } from 'eos-common';
 import { TransactResult } from 'eosjs/dist/eosjs-api-interfaces';
 import { waitFor } from '@utils/wait-for';
+import {FarmersWorldError} from "@providers/farmersworld/exceptions/farmersworld-error";
 
 const FW_TOOLS_CACHE: {
   refreshed: number;
@@ -43,7 +44,9 @@ export class FarmersWorld {
   #isEnabled = false;
 
   // процесс работы с инструментами на карте Mining
-  #wMinerStopHook: Function;
+  wMinerStopHook: Function;
+  // причина последней остановки процесса
+  wMinerStopReason: string = null;
 
   tools: AccountFwTool[] = [];
 
@@ -64,9 +67,20 @@ export class FarmersWorld {
 
     this.logger.log('Аккаунт в игре создан');
 
-    this.#wMinerStopHook = startMinerWorker(this);
+    this.wMinerStopHook = startMinerWorker(this);
 
     this.#isEnabled = true;
+  }
+
+  /** Проверка аккаунта на farmersworld:: доступ */
+  async hasPermissions() {
+    const permissions = await this.bot.wax.getPermissions();
+
+    if (permissions !== 'full' || !permissions.find(e => e === 'farmersworld::')) {
+      return false;
+    }
+
+    return true;
   }
 
   async #isUserRegistered() {
@@ -122,7 +136,7 @@ export class FarmersWorld {
   async disable() {
     if (!this.#isEnabled) return;
 
-    if (typeof this.#wMinerStopHook === 'function') this.#wMinerStopHook();
+    if (typeof this.wMinerStopHook === 'function') this.wMinerStopHook();
 
     this.#isEnabled = false;
   }

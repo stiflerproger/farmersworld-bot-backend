@@ -6,6 +6,7 @@ import { AccountFwTool } from '../interfaces/fw-tools';
 import { waitFor } from '@utils/wait-for';
 import { TransactResult } from 'eosjs/dist/eosjs-api-interfaces';
 import { FarmersWorld } from '@providers/farmersworld';
+import {FarmersWorldError} from "@providers/farmersworld/exceptions/farmersworld-error";
 
 export const startWorker: Worker = function (farmer: FarmersWorld) {
   let stopped = false,
@@ -23,12 +24,14 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
     toolSubRepairLimit = 70, // попутно ремонтировать инструмент
     energyRefillLimit = 350,
     energySubRefillLimit = 450,
-    woodWithdrawLimit = 50, // при достижении ресурса Wood этой отметки, будет инициирован вывод
-    woodToWaxLimit = 40; // при достижении этого числа Wood на балансе блокчейна, менять его на WAX
+    woodWithdrawLimit = 50, // при достижении ресурса этой отметки, будет инициирован вывод
+    woodToWaxLimit = 40; // при достижении этого числа ресурса на балансе блокчейна, менять его на WAX
+
+  farmer.wMinerStopHook?.(); // удаляем дубликат процесса
 
   start();
 
-  return () => {
+  return (reason?: string) => {
     if (stopped) return;
 
     stopped = true;
@@ -42,10 +45,12 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
     }
 
     withdrawStopHook?.(); // отменяем запланированный вывод токенов
+
+    farmer.wMinerStopReason = reason || null;
   };
 
-  /** перезапуск процесса (в ошибке указываем причину. Метод может и не перезапустить бота если ошибка CPU или ещё что) */
-  function rerun(ms, error?: any) {
+  /** Перезапуск процесса */
+  function rerun(ms) {
     if (stopped) return;
 
     clearTimeout(timeoutId);
@@ -56,335 +61,41 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
       delete claimTimeoutIds[assetId];
     }
 
+    claimStarted = false;
+
     withdrawStopHook?.(); // отменяем запланированный вывод токенов
 
     farmer.logger.log('Инициирован полный перезапуск!');
     timeoutId = setTimeout(start, ms);
   }
 
-  /** Восстановление энергии и починка инструментов, как отдельный процесс */
+  /** Использование всех инструментов на карте mining */
   function start() {
     // начало работы воркера
-    farmer.logger.log('Старт...');
+    farmer.logger.log('Проверка доступа к контракту...');
 
     if (stopped) return;
 
-    // TODO: обработчик ситуаций, когда у юзера не хватает реусрсов на обмен или покупку
-    getActions()
-      .then(async (refillData) => {
-        if (stopped) return;
-
-        if (refillData.withdraw?.length) {
-          if (typeof withdrawStopHook === 'function') {
-            withdrawStopHook();
-          }
-
-          farmer.logger.log(
-            `Пора выводить ресурсы: [${refillData.withdraw
-              .map((eosAsset) => eosAsset.quantity.toString())
-              .join(', ')}]`,
-          );
-
-          const stopHook = await farmer.withdrawTokens(refillData.withdraw, {
-            fee: 6,
-            timeout: true,
-          });
-
-          if (typeof stopHook === 'function') {
-            withdrawStopHook = stopHook;
-          } else {
-            // вывод сделался сразу, т.к. комиссия подошла
-            withdrawStopHook = null;
-            farmer.logger.log(
-              `Ресурсы успешно выведены: [${refillData.withdraw
-                .map((eosAsset) => eosAsset.quantity.toString())
-                .join(', ')}]`,
-            );
-          }
+    farmer.hasPermissions()
+      .then(async have => {
+        if (!have) {
+          throw new FarmersWorldError('Account dont have "farmersworld::" permission', 'PERMISSION_DENIED')
         }
-
-        const woodBalance = await farmer.bot.wax.getBalance({
-          token: 'FWW',
-        });
-
-        if (
-          woodBalance.quantity.amount.toJSNumber() >=
-          woodToWaxLimit * Math.pow(10, woodBalance.quantity.symbol.precision())
-        ) {
-          // нужно обменять дерево на вакс
-          farmer.logger.log(
-            `Нужно обменять FWW на WAX: [${woodBalance.quantity.toString()}]`,
-          );
-
-          const result = await farmer.bot.wax.swapToWax([woodBalance]);
-
-          if (result.unswapped?.length) {
-            farmer.logger.error(`Не удалось обменять ресурсы на WAX`);
-            return rerun(10 * 60 * 1000);
-          }
-
-          farmer.logger.log(
-            `Обмен завершен: [${result.received.quantity.toString()}]`,
-          );
-
-          if (stopped) return;
-          clearTimeout(timeoutId);
-          timeoutId = setTimeout(start, 60 * 1000); // через минуту после обмена повторяем запуск
-          return;
-        }
-
-        if (refillData.alcor?.length) {
-          // обмениваем с алкора
-          farmer.logger.log(
-            `Нужно обменять ресурсы с Alcor: [${refillData.alcor
-              .map((eosAsset) => eosAsset.quantity.toString())
-              .join(', ')}]`,
-          );
-
-          const res = await farmer.bot.wax.swapFromWax(refillData.alcor, {
-            slippage: 5,
-          });
-
-          if (res.unswapped?.length) {
-            farmer.logger.error(
-              'Не удалось купить валюту. Пробуем через 15 минут',
-            );
-            rerun(15 * 60 * 1000);
-            return;
-          }
-
-          farmer.logger.log(
-            `Ресурсы куплены: [${res.received
-              .map((eosAsset) => eosAsset.quantity.toString())
-              .join(', ')}] [-${res.spent.toFixed(8)} WAX]`,
-          );
-
-          if (stopped) return;
-          clearTimeout(timeoutId);
-          timeoutId = setTimeout(start, 60 * 1000); // через минуту после обмена повторяем запуск
-          return;
-        }
-
-        if (refillData.deposit?.length) {
-          // депозитим баланс внутрь игры
-          farmer.logger.log(
-            `Нужно задепозитить ресурсы: [${refillData.deposit
-              .map((eosAsset) => eosAsset.quantity.toString())
-              .join(', ')}]`,
-          );
-
-          await farmer.depositTokens(refillData.deposit);
-
-          farmer.logger.log(`Депозит выполнен. Через минут перепроверка`);
-
-          if (stopped) return;
-          clearTimeout(timeoutId);
-          timeoutId = setTimeout(start, 60 * 1000); // через минуту после обмена повторяем запуск
-          return;
-        }
-
-        if (refillData.refill) {
-          // чиним инструменты и поплняем энергию
-          farmer.logger.log(`Нужно починиться и восполнить энергию`);
-
-          await repairAndRefill();
-
-          farmer.logger.log(`Через минут перепроверка`);
-
-          if (stopped) return;
-          clearTimeout(timeoutId);
-          timeoutId = setTimeout(start, 60 * 1000); // через минуту после обмена повторяем запуск
-          return;
-        }
-
-        farmer.logger.log(
-          'Инструменты и энергия на достаточном уровне. Новая проверка через 5 часов!',
-        );
-
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(start, 5 * 60 * 60 * 1000); // раз в 5 часов проверять необходимость починки инструментов
 
         if (!claimStarted) {
           claimStarted = true;
-          setTimeout(addAllToClaim, 5000); // запускаем отдельный процесс для сбора ресурсов
+          addAllToClaim(); // запускаем отдельный процесс для сбора ресурсов
         }
       })
-      .catch((e) => {
-        farmer.logger.error(e);
+      .catch(e => {
+        if (e.code === 'PERMISSION_DENIED') {
+          farmer.logger.error('У аккаунта нет доступа к "farmersworld::"');
+          return farmer.wMinerStopHook?.(e.code);
+        }
 
         return rerun(60 * 1000);
-      });
-  }
+      })
 
-  /** Получить информацию о необходимых действиях на аккаунте */
-  async function getActions(): Promise<{
-    alcor?: eosCommon.ExtendedAsset[]; // нужно обменять с алкора
-    deposit?: eosCommon.ExtendedAsset[]; // нужно депнуть на внутриигровой счёт
-    withdraw?: eosCommon.ExtendedAsset[]; // лишние ресурсы на аккаунте
-    refill?: boolean; // нужно починиться или восстановить энергию
-  }> {
-    const goldNeeded = {
-        repair: 0,
-        subRepair: 0,
-      },
-      foodNeeded = {
-        refill: 0,
-        subRefill: 0,
-      };
-
-    const stats = await farmer.getAccountStats();
-    const tools = await farmer.getAccountTools();
-
-    const woodWithdraw =
-      stats.balance.wood >= woodWithdrawLimit
-        ? [
-            new eosCommon.ExtendedAsset(
-              Math.floor(Math.pow(10, 4) * stats.balance.wood),
-              new eosCommon.ExtendedSymbol(eosCommon.symbol('FWW', 4)),
-            ),
-          ]
-        : undefined;
-
-    for (const tool of tools) {
-      if (tool.current_durability < toolRepairLimit) {
-        goldNeeded.repair += (tool.durability - tool.current_durability) * 0.2; // 0.2 GOLD за единицу починки
-      } else if (tool.current_durability < toolSubRepairLimit) {
-        goldNeeded.subRepair +=
-          (tool.durability - tool.current_durability) * 0.2;
-      }
-    }
-
-    if (stats.energy.current < energyRefillLimit) {
-      foodNeeded.refill += (stats.energy.max - stats.energy.current) * 0.2; // 0.2 FOOD за единицу энергии
-    } else if (stats.energy.current < energySubRefillLimit) {
-      foodNeeded.subRefill += (stats.energy.max - stats.energy.current) * 0.2;
-    }
-
-    if (foodNeeded.refill + goldNeeded.repair <= 0) {
-      // всё окей, можно работать
-
-      return {
-        refill: false,
-        withdraw: woodWithdraw,
-      };
-    }
-
-    // общее количество недостающего ресурса для восполнения
-    let depositGoldNeeded = goldNeeded.repair + goldNeeded.subRepair,
-      depositFoodNeeded = foodNeeded.refill + foodNeeded.subRefill;
-
-    // вычесть текущий внутриирговой баланс
-    depositGoldNeeded -= stats.balance.gold || 0;
-    depositFoodNeeded -= stats.balance.food || 0;
-
-    depositGoldNeeded = Math.max(0, depositGoldNeeded);
-    depositFoodNeeded = Math.max(0, depositFoodNeeded);
-
-    if (depositGoldNeeded > 0 || depositFoodNeeded > 0) {
-      // нужно задепозитить какое-то количество ресурсов в игру
-      // вычисляем сколько ресурсов нужно обменять с алкора
-
-      depositGoldNeeded *= 1.15; // планируем на 15% запас
-      depositFoodNeeded *= 1.15;
-
-      const exchange = await farmer.getExchangeInfo(
-        eosCommon.asset(
-          Math.pow(10, 4) * depositGoldNeeded,
-          eosCommon.symbol('FWG', 4),
-        ),
-        eosCommon.asset(
-          Math.pow(10, 4) * depositFoodNeeded,
-          eosCommon.symbol('FWF', 4),
-        ),
-        null,
-      );
-
-      return {
-        refill: true,
-        deposit: exchange.deposit,
-        alcor: exchange.alcor,
-        withdraw: woodWithdraw,
-      };
-    }
-
-    return {
-      refill: true, // просто восстанавливаемся
-    };
-  }
-
-  async function repairAndRefill() {
-    const stats = await farmer.getAccountStats();
-    const tools = await farmer.getAccountTools();
-
-    if (stopped) return;
-
-    for (const tool of tools) {
-
-      const repairGoldNeeded = (tool.durability - tool.current_durability) * 0.2;
-
-      if (
-        (tool.current_durability < toolRepairLimit ||
-          tool.current_durability < toolSubRepairLimit) &&
-        stats.balance.gold >= repairGoldNeeded
-      ) {
-
-        if (stopped) return;
-
-        farmer.logger.log(
-          `Ремонт..${tool.asset_id} (${tool.template.template_name})`,
-        );
-        // починить и снять с текущего баланса
-        await farmer.repair(tool);
-
-        stats.balance.gold -= repairGoldNeeded;
-
-        farmer.logger.log(
-          `Ремонт..${tool.asset_id} (${tool.template.template_name})`,
-        );
-
-        await waitFor(5000);
-
-      } else if (
-        tool.current_durability < toolRepairLimit ||
-        tool.current_durability < toolSubRepairLimit
-      ) {
-
-        // инструмент нужно починить, но ресурсов для этого уже не хватает
-        farmer.logger.error(
-          `Ремонт..${tool.asset_id} (${tool.template.template_name}) | Не хватает GOLD для починки: N[${repairGoldNeeded}] H[${stats.balance.gold}]`,
-        );
-
-      }
-    }
-
-    if (
-      (stats.energy.current < energyRefillLimit ||
-        stats.energy.current < energySubRefillLimit) &&
-      stats.balance.food >= (stats.energy.max - stats.energy.current) * 0.2
-    ) {
-
-      if (stopped) return;
-
-      farmer.logger.log(`Восставновление энергии..`);
-
-      await farmer.energyRecover(stats.energy.max - stats.energy.current);
-
-      await waitFor(5000);
-
-    } else if (
-      stats.energy.current < energyRefillLimit ||
-      stats.energy.current < energySubRefillLimit
-    ) {
-
-      farmer.logger.error(`Восстановление энергии.. Не хватает FOOD для восстановления: N[${(stats.energy.max - stats.energy.current) * 0.2}] H[${stats.balance.food}]`)
-
-    }
-
-    farmer.logger.log(
-      'Инструменты отремонтированы, энергия восстановлена',
-    );
-
-    return;
   }
 
   /** Добавление новых инструментов в очередь сбора ресурсов. Те что уже в очереди игнорируются (т.е. можно вызывать постоянно, ничего не дублируется) */
@@ -407,10 +118,8 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
 
           // проверить инструмент на починку
           if (tool.current_durability - tool.template.durability_consumed < 0) {
-            farmer.logger.error(
-              'Инструмент не может использоваться! ' + tool.asset_id,
-            );
-            // TODO: ситуаиця теоритически невозможная, но можно будет обрабатывать
+            farmer.logger.error(`Инструмент не может использоваться! ${tool.asset_id}`);
+            // TODO: если в процессе починки инструмент был полностью сломан, то инициировать перезапуск майнера
             continue;
           }
 
@@ -419,12 +128,11 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
           const min = Math.floor(claimAfter / 1000 / 60),
             sec = Math.floor(claimAfter / 1000 - min * 60);
 
-          farmer.logger.log(
-            `${tool.asset_id} использование через: ${min}:${sec}`,
-          );
+          farmer.logger.log(`${tool.asset_id} использование через: ${min}:${sec}`);
 
-          if (claimTimeoutIds[tool.asset_id])
+          if (claimTimeoutIds[tool.asset_id]) {
             delete claimTimeoutIds[tool.asset_id];
+          }
 
           claimTimeoutIds[tool.asset_id] = {
             startAt: claimOn.getTime(),
@@ -479,7 +187,12 @@ export const startWorker: Worker = function (farmer: FarmersWorld) {
         setTimeout(addAllToClaim, 5000); // запросить с блокчейна актуальные кулдауны инструментов
       })
       .catch((e) => {
-        // очищаем все таймеры и перезапускаем всё
+        // добавить проверку и какую-то обработку для CPU
+        if (e.code === 'PERMISSION_DENIED') {
+          farmer.logger.error('У аккаунта нет доступа к "farmersworld::"');
+          return farmer.wMinerStopHook?.(e.code);
+        }
+
         if (stopped) return;
 
         farmer.logger.error(e);
